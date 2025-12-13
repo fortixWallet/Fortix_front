@@ -1,0 +1,100 @@
+{
+  "manifest_version": 3,
+  "name": "Forge Wallet",
+  "version": "0.0.15",
+  "description": "Free ERC-20 token transfers. Multi-chain wallet with swap & bridge. GoPlus Security protection. Supports Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Avalanche.",
+  "homepage_url": "https://forge-eth.io",
+  "author": "FORGE ETH",
+  
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
+
+  "action": {
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  },
+
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/provider.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/inject.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/provider.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "windows",
+    "sidePanel",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "https://api.fortixwallet.com/*",
+    "https://*.alchemy.com/*",
+    "https://*.infura.io/*",
+    "https://*.binance.org/*",
+    "https://*.binance.com/*",
+    "https://polygon-rpc.com/*",
+    "https://*.arbitrum.io/*",
+    "https://*.optimism.io/*",
+    "https://*.base.org/*",
+    "https://api.avax.network/*",
+    "https://*.publicnode.com/*",
+    "https://*.llamarpc.com/*",
+    "https://*.meowrpc.com/*",
+    "https://api.0x.org/*",
+    "https://li.quest/*",
+    "https://api.coingecko.com/*",
+    "https://*.cryptocompare.com/*",
+    "https://api.kraken.com/*",
+    "https://*.exchangerate-api.com/*",
+    "https://*.etherscan.io/*",
+    "https://*.bscscan.com/*",
+    "https://*.polygonscan.com/*",
+    "https://*.arbiscan.io/*",
+    "https://*.basescan.org/*",
+    "https://snowtrace.io/*",
+    "https://buy.moonpay.com/*",
+    "https://api.gopluslabs.io/*",
+    "https://www.4byte.directory/*"
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

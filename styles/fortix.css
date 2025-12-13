@@ -1,0 +1,521 @@
+/* FortiX Wallet Design - Glassmorphism Dark Theme */
+
+:root {
+    /* Dark Background Gradient */
+    --bg-gradient-start: #0f172a;
+    --bg-gradient-end: #1e293b;
+    
+    /* Glassmorphism */
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-hover: rgba(255, 255, 255, 0.1);
+    
+    /* Colors */
+    --primary-blue: #3b82f6;
+    --primary-green: #10b981;
+    --primary-purple: #a855f7;
+    --primary-pink: #ec4899;
+    --primary-orange: #f97316;
+    --primary-red: #ef4444;
+    
+    /* Text */
+    --text-white: #ffffff;
+    --text-slate-200: #e2e8f0;
+    --text-slate-400: #94a3b8;
+    --text-slate-600: #475569;
+    
+    /* Status */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+    
+    /* Border Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-2xl: 24px;
+    --radius-3xl: 32px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 360px;
+    min-height: 100vh;
+    height: 100vh;
+    background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+    color: var(--text-white);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 13px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Main Container */
+.fortix-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    height: 100vh;
+}
+
+/* Header with Glassmorphism */
+.fortix-header {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 16px;
+}
+
+.fortix-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.fortix-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fortix-logo-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.fortix-logo-text h1 {
+    color: var(--text-white);
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.fortix-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.fortix-status-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.fortix-status-text {
+    font-size: 11px;
+    color: var(--success);
+}
+
+.fortix-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* AI Button with Gradient */
+.fortix-ai-btn {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-pink) 100%);
+    border: none;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.5);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fortix-ai-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(168, 85, 247, 0.6);
+}
+
+.fortix-ai-indicator {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background: var(--success);
+    border-radius: 50%;
+    border: 2px solid var(--bg-gradient-start);
+}
+
+.fortix-settings-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: none;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.fortix-settings-btn:hover {
+    background: var(--glass-hover);
+}
+
+/* Balance Card - Glassmorphism */
+.fortix-balance-card {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-3xl);
+    padding: 20px;
+    box-shadow: var(--shadow-xl);
+    margin-bottom: 16px;
+}
+
+.fortix-balance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.fortix-balance-label {
+    font-size: 13px;
+    color: #bfdbfe;
+}
+
+.fortix-balance-toggle {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.fortix-balance-toggle:hover {
+    color: var(--text-white);
+}
+
+.fortix-balance-amount {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 8px;
+}
+
+.fortix-balance-change {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--success);
+    font-size: 13px;
+}
+
+.fortix-balance-change.negative {
+    color: var(--danger);
+}
+
+/* Quick Actions Grid */
+.fortix-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.fortix-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 8px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fortix-action-btn:hover {
+    background: var(--glass-hover);
+    transform: translateY(-2px);
+}
+
+.fortix-action-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.2s;
+}
+
+.fortix-action-btn:hover .fortix-action-icon {
+    transform: scale(1.1);
+}
+
+.fortix-action-icon.send {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.fortix-action-icon.receive {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.fortix-action-icon.swap {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+}
+
+.fortix-action-icon.nft {
+    background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+}
+
+.fortix-action-text {
+    font-size: 11px;
+    color: var(--text-white);
+}
+
+/* Tabs */
+.fortix-tabs {
+    display: flex;
+    border-top: 1px solid var(--glass-border);
+    padding: 0 8px;
+}
+
+.fortix-tab {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-slate-400);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fortix-tab.active {
+    color: var(--primary-blue);
+    border-bottom-color: var(--primary-blue);
+}
+
+.fortix-tab:hover {
+    color: var(--text-slate-200);
+}
+
+/* Content Area */
+.fortix-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+/* Token List */
+.fortix-token-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fortix-token-item:hover {
+    background: var(--glass-hover);
+}
+
+.fortix-token-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fortix-token-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text-white);
+    box-shadow: var(--shadow-lg);
+}
+
+.fortix-token-info {
+    text-align: left;
+}
+
+.fortix-token-name {
+    color: var(--text-white);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.fortix-token-amount {
+    color: var(--text-slate-400);
+    font-size: 12px;
+}
+
+.fortix-token-right {
+    text-align: right;
+}
+
+.fortix-token-value {
+    color: var(--text-white);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.fortix-token-change {
+    font-size: 12px;
+}
+
+.fortix-token-change.positive {
+    color: var(--success);
+}
+
+.fortix-token-change.negative {
+    color: var(--danger);
+}
+
+/* Mode Toggle */
+.fortix-mode-toggle {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: 4px;
+    z-index: 1000;
+}
+
+.fortix-mode-btn {
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-slate-400);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fortix-mode-btn.active {
+    background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+    color: var(--text-white);
+}
+
+/* Utility Classes */
+.fortix-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.fortix-icon-sm {
+    width: 16px;
+    height: 16px;
+}
+
+.fortix-icon-lg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Hide scrollbar but keep functionality */
+.fortix-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.fortix-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fortix-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}

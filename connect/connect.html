@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect to Site - Forge Wallet</title>
+    <link rel="stylesheet" href="../styles/main.css">
+    <style>
+        body {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            margin: 0;
+            background: var(--bg-primary);
+        }
+        .connect-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .account-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .account-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-orange));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .connecting-text {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .extension-info {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-left: 44px;
+        }
+        .connect-body {
+            flex: 1;
+            padding: 24px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .logos-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .logo-circle {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
+            overflow: hidden;
+        }
+        .logo-circle img {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }
+        .site-info-center {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .site-title {
+            color: var(--text-primary);
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .site-url {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .permissions-container {
+            width: 100%;
+            max-width: 320px;
+        }
+        .permission-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-left: 8px;
+        }
+        .permission-icon {
+            font-size: 20px;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+        .permission-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .connect-footer {
+            padding: 16px 20px 30px 20px;
+            border-top: 1px solid var(--border-color);
+        }
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        .action-buttons button {
+            flex: 1;
+            height: 48px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        
+        /* GoPlus Security Warning Styles */
+        .security-warning {
+            display: flex;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 12px;
+            margin: 16px 0;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .security-warning.phishing {
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.2), rgba(204, 0, 0, 0.1));
+            border: 2px solid #ff4444;
+        }
+        
+        .security-warning.risky {
+            background: linear-gradient(135deg, rgba(255, 152, 0, 0.15), rgba(230, 81, 0, 0.1));
+            border: 2px solid #ff9800;
+        }
+        
+        .security-warning-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+        
+        .security-warning-content {
+            flex: 1;
+        }
+        
+        .security-warning-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #ff4444;
+            margin-bottom: 6px;
+        }
+        
+        .security-warning.risky .security-warning-title {
+            color: #ff9800;
+        }
+        
+        .security-warning-message {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        
+        .security-warning-risks {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin: 8px 0;
+            padding-left: 16px;
+        }
+        
+        .security-warning-risks li {
+            margin: 4px 0;
+        }
+        
+        .security-warning-badge {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+        
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(21, 128, 61, 0.1));
+            border: 1px solid #22c55e;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: #22c55e;
+            margin-top: 8px;
+        }
+        
+        .verified-icon {
+            font-weight: 700;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="connect-header">
+        <div class="account-info">
+            <div class="account-avatar" id="accountAvatar">A1</div>
+            <div>
+                <div class="connecting-text">
+                    Connecting with <span id="shortAddress" style="font-family: var(--font-mono);"></span>
+                </div>
+            </div>
+        </div>
+        <div class="extension-info">Using browser extension.</div>
+    </div>
+
+    <!-- Body -->
+    <div class="connect-body">
+        <div class="logos-container">
+            <div class="logo-circle">
+                <img src="../assets/forge-logo.svg" alt="Forge Wallet">
+            </div>
+            <div class="logo-circle" id="siteLogo">
+                <img id="siteFavicon" src="" alt="Site" style="display: none;">
+                <span id="siteEmoji" style="display: flex; align-items: center; justify-content: center;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                </span>
+            </div>
+        </div>
+
+        <div class="site-info-center">
+            <div class="site-title">Connect to website</div>
+            <div class="site-url" id="siteUrl"></div>
+        </div>
+
+        <div class="permissions-container">
+            <div class="permission-item">
+                <span class="permission-icon" style="color: #3b82f6;">✓</span>
+                <div class="permission-text">Let it see your wallet balance and activity</div>
+            </div>
+            <div class="permission-item">
+                <span class="permission-icon" style="color: #3b82f6;">✓</span>
+                <div class="permission-text">Let it send you requests for transactions</div>
+            </div>
+            <div class="permission-item">
+                <span class="permission-icon" style="color: #ef4444;">✕</span>
+                <div class="permission-text">Funds will not leave your wallet until you execute a transaction</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="connect-footer">
+        <div class="action-buttons">
+            <button id="cancelBtn" class="btn btn-secondary">Deny</button>
+            <button id="connectBtn" class="btn btn-primary">Connect</button>
+        </div>
+    </div>
+
+    <script src="connect.js"></script>
+</body>
+</html>

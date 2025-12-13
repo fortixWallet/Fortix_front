@@ -1,0 +1,20 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main diamond shape (максимальний розмір, мінімум фону) -->
+  <g transform="translate(64, 64) scale(1.15)">
+    <!-- Top pyramid -->
+    <polygon points="0,-60 -50,0 0,18 50,0" fill="#007acc" opacity="1"/>
+    
+    <!-- Bottom left facet -->
+    <polygon points="0,18 -50,0 -30,48 0,60" fill="#005a9e" opacity="0.95"/>
+    
+    <!-- Bottom right facet with orange -->
+    <polygon points="0,18 50,0 30,48 0,60" fill="#ff8c00" opacity="0.9"/>
+    
+    <!-- Top highlight with orange glow -->
+    <polygon points="0,-60 -50,0 0,18" fill="#00b4ff" opacity="0.25"/>
+    <polygon points="0,-60 50,0 0,18" fill="#ff9933" opacity="0.3"/>
+    
+    <!-- Orange edge highlight -->
+    <polygon points="30,48 50,0 42,-8" fill="#ff6600" opacity="0.6"/>
+  </g>
+</svg>
