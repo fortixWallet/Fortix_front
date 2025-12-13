@@ -1,12 +1,11 @@
 // Forge Wallet - Ethereum Provider (window.ethereum)
+// Version: 0.0.16
+// Fix: Prevent auto-popup - require user gesture for connection
 (function() {
     'use strict';
     
     // Production mode - disable verbose logging
-    const PRODUCTION_MODE = true;
-    if (PRODUCTION_MODE) {
-        // Note: Can't override console in content script, so we use a local flag
-    }
+    const PRODUCTION_MODE = false; // TEMP: Enable logging for debug
     
     class ForgeWalletProvider {
         constructor() {
@@ -17,6 +16,10 @@
             this._chainId = '0x1';
             this._pendingRequests = new Map();
             this._requestId = 0;
+            this._lastUserGesture = 0; // Timestamp of last user interaction
+            
+            // Track user gestures (clicks, keypresses)
+            this._setupUserGestureTracking();
             
             // Setup message listener
             window.addEventListener('message', (event) => {
@@ -55,13 +58,74 @@
             });
         }
         
+        // Track user gestures to determine if request is user-initiated
+        _setupUserGestureTracking() {
+            const updateGesture = () => {
+                this._lastUserGesture = Date.now();
+            };
+            
+            // Track clicks and keypresses as user gestures
+            window.addEventListener('click', updateGesture, true);
+            window.addEventListener('keydown', updateGesture, true);
+            window.addEventListener('touchstart', updateGesture, true);
+        }
+        
+        // Check if there was a recent user gesture (within 5 seconds)
+        _hasRecentUserGesture() {
+            const timeSinceGesture = Date.now() - this._lastUserGesture;
+            return timeSinceGesture < 5000; // 5 second window
+        }
+        
         // Main request method (EIP-1193)
         async request({ method, params = [] }) {
-            console.log('🔥 Provider Request:', method, params);
+            console.log('🔥 Provider Request:', method, params, 'userGesture:', this._hasRecentUserGesture());
             
             switch (method) {
-                case 'eth_requestAccounts':
                 case 'eth_accounts':
+                    // Silent check - return cached accounts or query backend WITHOUT popup
+                    // This is called by dApps to check if wallet is connected (e.g., on page load)
+                    console.log('🔥 eth_accounts called (silent check)');
+                    if (this._accounts.length > 0) {
+                        return this._accounts;
+                    }
+                    // Query backend for connected accounts (no popup)
+                    const accountsResult = await this._sendRequest('eth_accounts', []);
+                    if (accountsResult && accountsResult.success && accountsResult.accounts) {
+                        this._accounts = accountsResult.accounts;
+                        if (this._accounts.length > 0) {
+                            this._isConnected = true;
+                        }
+                    }
+                    return this._accounts;
+                
+                case 'eth_requestAccounts':
+                    console.log('🔥 eth_requestAccounts called, hasUserGesture:', this._hasRecentUserGesture());
+                    
+                    // If already connected, return accounts without popup
+                    if (this._accounts.length > 0) {
+                        console.log('🔥 Already connected, returning cached accounts');
+                        return this._accounts;
+                    }
+                    
+                    // Check if site is already connected (query backend)
+                    const existingAccounts = await this._sendRequest('eth_accounts', []);
+                    if (existingAccounts && existingAccounts.success && existingAccounts.accounts && existingAccounts.accounts.length > 0) {
+                        console.log('🔥 Site already connected, returning accounts without popup');
+                        this._accounts = existingAccounts.accounts;
+                        this._isConnected = true;
+                        return this._accounts;
+                    }
+                    
+                    // NOT connected - check for user gesture before showing popup
+                    if (!this._hasRecentUserGesture()) {
+                        console.log('🔥 NO user gesture - rejecting auto-connect attempt');
+                        // Return empty array instead of showing popup (like MetaMask does)
+                        // Or throw error - dApp will need to handle this
+                        throw new Error('User gesture required for wallet connection');
+                    }
+                    
+                    // User gesture detected - proceed with connection popup
+                    console.log('🔥 User gesture detected, showing connection popup');
                     return this._handleAccountsRequest();
                     
                 case 'eth_chainId':
@@ -169,13 +233,13 @@
                 .catch(error => callback(error, null));
         }
         
-        // Handle accounts request
+        // Handle accounts request (with popup for connection)
         async _handleAccountsRequest() {
             if (this._accounts.length > 0) {
                 return this._accounts;
             }
             
-            // Request connection
+            // Request connection (this triggers popup in service-worker)
             const result = await this._sendRequest('eth_requestAccounts', []);
             
             if (result.success && result.accounts) {
