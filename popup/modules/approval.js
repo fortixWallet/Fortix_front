@@ -254,17 +254,19 @@ function getDynamicSpenderAddress(txData, routerAddress, aggregator = '') {
  * @param {string} chain - Chain name (ethereum, polygon, etc)
  * @param {string} tokenAddress - ERC20 token address
  * @param {string} amount - Amount to approve
+ * @param {string} userAddress - User wallet address (REQUIRED for simulation!)
  * @returns {Promise<{spenderAddress: string, approveTransaction: Object}>}
  */
-async function getOKXApprovalData(chain, tokenAddress, amount) {
+async function getOKXApprovalData(chain, tokenAddress, amount, userAddress) {
     try {
-        console.log('[SYNC] Fetching OKX approval data from backend...', { chain, tokenAddress, amount });
+        console.log('[SYNC] Fetching OKX approval data from backend...', { chain, tokenAddress, amount, userAddress });
         
         // Use FortixAPI.getApprovalData() instead of direct fetch
         const data = await FortixAPI.getApprovalData('okx', {
             chain: chain,
             tokenAddress: tokenAddress,
-            amount: amount
+            amount: amount,
+            userAddress: userAddress  // REQUIRED for transaction simulation!
         });
         
         if (!data.success) {

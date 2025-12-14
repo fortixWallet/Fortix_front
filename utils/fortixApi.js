@@ -213,21 +213,42 @@ async function getApprovalData(aggregator, params) {
     const url = `${FORTIX_API_BASE}/api/v1/approval/get`;
 
     // Build request body based on aggregator
+    // Each aggregator has DIFFERENT format requirements!
     let requestBody;
+    
     if (aggregator === 'okx') {
+        // OKX: FLAT structure with numeric chain string
         requestBody = {
             aggregator: 'okx',
-            chain: params.chain,
+            chain: params.chain,           // Numeric string: "1", "137"
             tokenAddress: params.tokenAddress,
-            amount: params.amount
+            amount: params.amount,
+            userAddress: params.userAddress  // REQUIRED for simulation!
         };
     } else if (aggregator === 'rango') {
+        // Rango: NESTED structure with chain names
         requestBody = {
             aggregator: 'rango',
-            ...params.quoteRequest
+            quoteRequest: params.quoteRequest  // Must be nested, NOT spread!
+        };
+    } else if (aggregator === 'zerocx' || aggregator === '0x') {
+        // ZeroCX (0x): FLAT structure with spenderAddress from quote
+        requestBody = {
+            aggregator: 'zerocx',
+            chain: params.chain,           // Numeric string: "1", "137"
+            fromToken: params.fromToken || params.tokenAddress,
+            spenderAddress: params.spenderAddress,  // From quote response!
+            amount: params.amount,
+            userAddress: params.userAddress  // REQUIRED for simulation!
+        };
+    } else if (aggregator === 'lifi' || aggregator === 'squid') {
+        // LiFi/Squid: Similar to Rango - nested quoteRequest
+        requestBody = {
+            aggregator: aggregator,
+            quoteRequest: params.quoteRequest
         };
     } else {
-        throw new Error(`Aggregator ${aggregator} does not require separate approval call`);
+        throw new Error(`Aggregator ${aggregator} does not support separate approval call`);
     }
 
     const response = await fetchWithTimeout(url, {

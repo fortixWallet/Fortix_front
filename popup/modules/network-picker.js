@@ -2627,7 +2627,8 @@ async function executeSwap() {
                 approvalData = await getOKXApprovalData(
                     quoteRequest.fromChain || 'ethereum',
                     quoteRequest.fromToken,
-                    quoteRequest.amount
+                    quoteRequest.amount,
+                    currentAccount.address  // REQUIRED for simulation!
                 );
                 
                 if (approvalData?.spenderAddress) {
