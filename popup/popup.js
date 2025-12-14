@@ -17,7 +17,16 @@ if (PRODUCTION_MODE) {
 let currentAccount = null;
 let accounts = [];
 let currentNetwork = '11155111'; // Default to Sepolia, will be loaded from storage
-let enabledNetworks = ['1', '10', '56', '137', '42161', '8453', '43114']; // All networks enabled by default
+// All 37 mainnet networks enabled by default
+let enabledNetworks = [
+    '1', '10', '56', '137', '42161', '8453', '43114', // Tier 1
+    '324', '534352', '59144', '1101', // ZK
+    '81457', '5000', '42170', '167000', // L2
+    '250', '100', '42220', '1329', '50', // Alt L1
+    '1284', '1285', '7777777', '33139', '747474', // Gaming
+    '204', // opBNB
+    '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988' // Emerging
+];
 let ethPrice = 0;
 let nativeTokenPrice = 0; // Price for current network's native token
 let selectedAsset = null; // Selected token/coin for sending
@@ -70,15 +79,90 @@ let tokenDataCache = {
 };
 
 // Network Configurations
+// ═══════════════════════════════════════════════════════════════════════════════
+// NETWORKS CONFIGURATION (37 mainnet chains)
+// Version: 2.0.0 | Last updated: 2025-12-13
+// ═══════════════════════════════════════════════════════════════════════════════
 const NETWORKS = {
-    '1': { name: 'Ethereum', rpc: 'https://ethereum.publicnode.com', explorer: 'https://etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'ethereum' },
-    '56': { name: 'BNB Chain', rpc: 'https://bsc-dataseed.binance.org', explorer: 'https://bscscan.com', symbol: 'BNB', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png', chain: 'smartchain' },
-    '137': { name: 'Polygon', rpc: 'https://polygon-rpc.com', explorer: 'https://polygonscan.com', symbol: 'MATIC', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', chain: 'polygon' },
-    '42161': { name: 'Arbitrum', rpc: 'https://arb1.arbitrum.io/rpc', explorer: 'https://arbiscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', chain: 'arbitrum' },
-    '10': { name: 'Optimism', rpc: 'https://mainnet.optimism.io', explorer: 'https://optimistic.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', chain: 'optimism' },
-    '8453': { name: 'Base', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', chain: 'base' },
-    '43114': { name: 'Avalanche', rpc: 'https://api.avax.network/ext/bc/C/rpc', explorer: 'https://snowtrace.io', symbol: 'AVAX', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', chain: 'avalanchec' }
+    // TIER 1: Ethereum & Major L2s
+    '1': { name: 'Ethereum', rpc: 'https://eth.llamarpc.com', explorer: 'https://etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'ethereum', chainId: 1, color: '#627EEA' },
+    '8453': { name: 'Base', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', chain: 'base', chainId: 8453, color: '#0052FF' },
+    '42161': { name: 'Arbitrum One', rpc: 'https://arbitrum.llamarpc.com', explorer: 'https://arbiscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', chain: 'arbitrum', chainId: 42161, color: '#28A0F0' },
+    '10': { name: 'Optimism', rpc: 'https://optimism.llamarpc.com', explorer: 'https://optimistic.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', chain: 'optimism', chainId: 10, color: '#FF0420' },
+    '137': { name: 'Polygon', rpc: 'https://polygon.llamarpc.com', explorer: 'https://polygonscan.com', symbol: 'POL', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', chain: 'polygon', chainId: 137, color: '#8247E5' },
+    '56': { name: 'BNB Chain', rpc: 'https://bsc-dataseed1.binance.org', explorer: 'https://bscscan.com', symbol: 'BNB', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png', chain: 'smartchain', chainId: 56, color: '#F0B90B' },
+    '43114': { name: 'Avalanche', rpc: 'https://avalanche-c-chain.publicnode.com', explorer: 'https://snowtrace.io', symbol: 'AVAX', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', chain: 'avalanchec', chainId: 43114, color: '#E84142' },
+    // ZK Rollups
+    '324': { name: 'zkSync Era', rpc: 'https://mainnet.era.zksync.io', explorer: 'https://explorer.zksync.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/zksync/info/logo.png', chain: 'zksync', chainId: 324, color: '#8C8DFC' },
+    '534352': { name: 'Scroll', rpc: 'https://rpc.scroll.io', explorer: 'https://scrollscan.com', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/scroll/info/logo.png', chain: 'scroll', chainId: 534352, color: '#FFEEDA' },
+    '59144': { name: 'Linea', rpc: 'https://rpc.linea.build', explorer: 'https://lineascan.build', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/linea/info/logo.png', chain: 'linea', chainId: 59144, color: '#121212' },
+    '1101': { name: 'Polygon zkEVM', rpc: 'https://zkevm-rpc.com', explorer: 'https://zkevm.polygonscan.com', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygonzkevm/info/logo.png', chain: 'polygonzkevm', chainId: 1101, color: '#8247E5' },
+    // L2 & Rollups
+    '81457': { name: 'Blast', rpc: 'https://rpc.blast.io', explorer: 'https://blastscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/blast/info/logo.png', chain: 'blast', chainId: 81457, color: '#FCFC03' },
+    '5000': { name: 'Mantle', rpc: 'https://rpc.mantle.xyz', explorer: 'https://mantlescan.xyz', symbol: 'MNT', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/mantle/info/logo.png', chain: 'mantle', chainId: 5000, color: '#000000' },
+    '42170': { name: 'Arbitrum Nova', rpc: 'https://nova.arbitrum.io/rpc', explorer: 'https://nova.arbiscan.io', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum-nova.jpg', chain: 'arbitrumnova', chainId: 42170, color: '#E57310' },
+    '167000': { name: 'Taiko', rpc: 'https://rpc.mainnet.taiko.xyz', explorer: 'https://taikoscan.io', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_taiko.jpg', chain: 'taiko', chainId: 167000, color: '#E81899' },
+    // Alt L1s
+    '250': { name: 'Fantom', rpc: 'https://rpc.ftm.tools', explorer: 'https://ftmscan.com', symbol: 'FTM', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png', chain: 'fantom', chainId: 250, color: '#1969FF' },
+    '100': { name: 'Gnosis', rpc: 'https://rpc.gnosischain.com', explorer: 'https://gnosisscan.io', symbol: 'xDAI', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdai/info/logo.png', chain: 'xdai', chainId: 100, color: '#04795B' },
+    '42220': { name: 'Celo', rpc: 'https://forno.celo.org', explorer: 'https://celoscan.io', symbol: 'CELO', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/celo/info/logo.png', chain: 'celo', chainId: 42220, color: '#FCFF52' },
+    '1329': { name: 'Sei', rpc: 'https://evm-rpc.sei-apis.com', explorer: 'https://seitrace.com', symbol: 'SEI', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sei/info/logo.png', chain: 'sei', chainId: 1329, color: '#9B1B1B' },
+    '50': { name: 'XDC Network', rpc: 'https://rpc.xinfin.network', explorer: 'https://xdcscan.io', symbol: 'XDC', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdc/info/logo.png', chain: 'xdc', chainId: 50, color: '#1A3B59' },
+    // Gaming & NFT
+    '1284': { name: 'Moonbeam', rpc: 'https://rpc.api.moonbeam.network', explorer: 'https://moonscan.io', symbol: 'GLMR', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonbeam/info/logo.png', chain: 'moonbeam', chainId: 1284, color: '#53CBC8' },
+    '1285': { name: 'Moonriver', rpc: 'https://rpc.api.moonriver.moonbeam.network', explorer: 'https://moonriver.moonscan.io', symbol: 'MOVR', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonriver/info/logo.png', chain: 'moonriver', chainId: 1285, color: '#F2B705' },
+    '7777777': { name: 'Zora', rpc: 'https://rpc.zora.energy', explorer: 'https://explorer.zora.energy', symbol: 'ETH', icon: 'https://icons.llama.fi/zora.jpg', chain: 'zora', chainId: 7777777, color: '#000000' },
+    '33139': { name: 'ApeChain', rpc: 'https://rpc.apechain.com/http', explorer: 'https://apescan.io', symbol: 'APE', icon: 'https://icons.llamao.fi/icons/chains/rsz_apechain.jpg', chain: 'apechain', chainId: 33139, color: '#0054FA' },
+    '747474': { name: 'Katana', rpc: 'https://ronin.lgns.net/rpc', explorer: 'https://app.roninchain.com', symbol: 'RON', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ronin/info/logo.png', chain: 'ronin', chainId: 747474, color: '#1273EA' },
+    // BNB Ecosystem
+    '204': { name: 'opBNB', rpc: 'https://opbnb-mainnet-rpc.bnbchain.org', explorer: 'https://opbnbscan.com', symbol: 'BNB', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/opbnb/info/logo.png', chain: 'opbnb', chainId: 204, color: '#F0B90B' },
+    // Emerging Chains
+    '80094': { name: 'Berachain', rpc: 'https://rpc.berachain.com', explorer: 'https://berascan.io', symbol: 'BERA', icon: 'https://icons.llamao.fi/icons/chains/rsz_berachain.jpg', chain: 'berachain', chainId: 80094, color: '#FF6B00' },
+    '146': { name: 'Sonic', rpc: 'https://rpc.soniclabs.com', explorer: 'https://sonicscan.org', symbol: 'S', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sonic/info/logo.png', chain: 'sonic', chainId: 146, color: '#0088FF' },
+    '999': { name: 'HyperEVM', rpc: 'https://rpc.hyperliquid.xyz/evm', explorer: 'https://explorer.hyperliquid.xyz', symbol: 'HYPE', icon: 'https://icons.llama.fi/hyperliquid.png', chain: 'hyperevm', chainId: 999, color: '#00FF88' },
+    '480': { name: 'World Chain', rpc: 'https://worldchain-mainnet.g.alchemy.com/public', explorer: 'https://worldscan.org', symbol: 'ETH', icon: 'https://icons.llama.fi/world-chain.png', chain: 'worldchain', chainId: 480, color: '#000000' },
+    '1923': { name: 'Swell Chain', rpc: 'https://swell-mainnet.alt.technology', explorer: 'https://explorer.swellnetwork.io', symbol: 'ETH', icon: 'https://icons.llama.fi/swell.png', chain: 'swell', chainId: 1923, color: '#3068F7' },
+    '2741': { name: 'Abstract', rpc: 'https://api.mainnet.abs.xyz', explorer: 'https://abscan.org', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_abstract.jpg', chain: 'abstract', chainId: 2741, color: '#00D632' },
+    '252': { name: 'Fraxtal', rpc: 'https://rpc.frax.com', explorer: 'https://fraxscan.com', symbol: 'frxETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_fraxtal.jpg', chain: 'fraxtal', chainId: 252, color: '#000000' },
+    '199': { name: 'BitTorrent Chain', rpc: 'https://rpc.bittorrentchain.io', explorer: 'https://bttcscan.com', symbol: 'BTT', icon: 'https://icons.llamao.fi/icons/chains/rsz_bittorrent.jpg', chain: 'bittorrent', chainId: 199, color: '#000000' },
+    '130': { name: 'Unichain', rpc: 'https://mainnet.unichain.org', explorer: 'https://uniscan.xyz', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_unichain.jpg', chain: 'unichain', chainId: 130, color: '#FF007A' },
+    '143': { name: 'Monad', rpc: 'https://rpc.monad.xyz', explorer: 'https://explorer.monad.xyz', symbol: 'MON', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/monad/info/logo.png', chain: 'monad', chainId: 143, color: '#836EF9', enabled: false },
+    '988': { name: 'Stable Chain', rpc: 'https://rpc.stablechain.io', explorer: 'https://explorer.stablechain.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'stablechain', chainId: 988, color: '#00FF00' },
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // TESTNETS
+    // ═══════════════════════════════════════════════════════════════════════════════
+    '11155111': { name: 'Sepolia', rpc: 'https://rpc.sepolia.org', explorer: 'https://sepolia.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'sepolia', chainId: 11155111, color: '#627EEA', testnet: true },
+    '80002': { name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology', explorer: 'https://amoy.polygonscan.com', symbol: 'POL', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', chain: 'polygon-amoy', chainId: 80002, color: '#8247E5', testnet: true },
+    '421614': { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc', explorer: 'https://sepolia.arbiscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', chain: 'arbitrum-sepolia', chainId: 421614, color: '#28A0F0', testnet: true },
+    '11155420': { name: 'Optimism Sepolia', rpc: 'https://sepolia.optimism.io', explorer: 'https://sepolia-optimism.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', chain: 'optimism-sepolia', chainId: 11155420, color: '#FF0420', testnet: true },
+    '84532': { name: 'Base Sepolia', rpc: 'https://sepolia.base.org', explorer: 'https://sepolia.basescan.org', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', chain: 'base-sepolia', chainId: 84532, color: '#0052FF', testnet: true }
 };
+
+// Recent networks storage key
+let recentNetworks = [];
+const MAX_RECENT_NETWORKS = 3;
+
+// Load recent networks from storage
+async function loadRecentNetworks() {
+    try {
+        const result = await chrome.storage.local.get(['recentNetworks']);
+        recentNetworks = result.recentNetworks || [];
+    } catch (e) {
+        recentNetworks = [];
+    }
+}
+
+// Save network to recent
+async function saveToRecentNetworks(networkId) {
+    // Remove if already exists
+    recentNetworks = recentNetworks.filter(id => id !== networkId);
+    // Add to front
+    recentNetworks.unshift(networkId);
+    // Keep only MAX_RECENT_NETWORKS
+    recentNetworks = recentNetworks.slice(0, MAX_RECENT_NETWORKS);
+    // Save
+    await chrome.storage.local.set({ recentNetworks });
+}
 
 // Popular tokens by network
 const POPULAR_TOKENS = {
@@ -369,7 +453,17 @@ async function checkWalletStatus() {
     
     // Load enabled networks (default: all enabled)
     if (result.enabledNetworks && result.enabledNetworks.length > 0) {
-        enabledNetworks = result.enabledNetworks;
+        // Migration: if saved list is smaller than current default, update to all networks
+        const allNetworkIds = Object.keys(NETWORKS);
+        if (result.enabledNetworks.length < allNetworkIds.length) {
+            // Add new networks that weren't in old list
+            enabledNetworks = [...new Set([...result.enabledNetworks, ...allNetworkIds])];
+            // Save updated list
+            chrome.storage.local.set({ enabledNetworks });
+            console.log('[NETWORKS] Migrated enabledNetworks:', enabledNetworks.length, 'networks');
+        } else {
+            enabledNetworks = result.enabledNetworks;
+        }
     } else {
         // Default: all networks enabled
         enabledNetworks = Object.keys(NETWORKS);
@@ -945,6 +1039,9 @@ async function openNetworkModal() {
     
     if (!modal) return;
     
+    // Load recent networks
+    await loadRecentNetworks();
+    
     // Populate network list (shows cached balances immediately)
     populateNetworkList();
     
@@ -980,46 +1077,106 @@ function closeNetworkModal() {
     }
 }
 
-// Populate network list
+// Populate network list - simple flat list sorted by popularity
 function populateNetworkList(filter = '') {
     const listContainer = document.getElementById('networkList');
     if (!listContainer) return;
     
     const filterLower = filter.toLowerCase().trim();
     
-    // Filter networks - only show enabled networks
-    const filteredNetworks = Object.entries(NETWORKS).filter(([id, network]) => {
-        // First check if network is enabled
-        if (!enabledNetworks.includes(id)) return false;
+    // Mainnet priority order
+    const NETWORK_PRIORITY = [
+        '1', '8453', '42161', '10', '137', '56', '43114', // Tier 1
+        '324', '534352', '59144', '1101', // ZK
+        '81457', '5000', '42170', '167000', // L2
+        '250', '100', '42220', '1329', '50', // Alt L1
+        '1284', '1285', '7777777', '33139', '747474', // Gaming
+        '204', // BNB
+        '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988' // Emerging
+    ];
+    
+    // Testnet priority order
+    const TESTNET_PRIORITY = ['11155111', '84532', '421614', '11155420', '80002'];
+    
+    // Get enabled networks, filter testnets based on toggle
+    let networkIds = Object.keys(NETWORKS).filter(id => {
+        const network = NETWORKS[id];
+        if (!enabledNetworks.includes(id) && !network.testnet) return false;
         
-        // Then apply search filter
-        if (!filterLower) return true;
-        return network.name.toLowerCase().includes(filterLower) ||
-               network.symbol.toLowerCase().includes(filterLower) ||
-               id.includes(filterLower);
+        // Filter testnets
+        if (network.testnet && !showTestnets) return false;
+        
+        return true;
     });
     
-    if (filteredNetworks.length === 0) {
+    // Filter by search
+    if (filterLower) {
+        networkIds = networkIds.filter(id => {
+            const network = NETWORKS[id];
+            return network.name.toLowerCase().includes(filterLower) ||
+                   network.symbol.toLowerCase().includes(filterLower) ||
+                   id.includes(filterLower);
+        });
+    }
+    
+    // Sort: testnets first (if enabled), then current, then by priority
+    networkIds.sort((a, b) => {
+        const aNet = NETWORKS[a];
+        const bNet = NETWORKS[b];
+        
+        // Current network always first
+        if (a === currentNetwork) return -1;
+        if (b === currentNetwork) return 1;
+        
+        // Testnets first when showTestnets is enabled
+        if (showTestnets) {
+            if (aNet.testnet && !bNet.testnet) return -1;
+            if (!aNet.testnet && bNet.testnet) return 1;
+            
+            // Sort testnets by testnet priority
+            if (aNet.testnet && bNet.testnet) {
+                const aIdx = TESTNET_PRIORITY.indexOf(a);
+                const bIdx = TESTNET_PRIORITY.indexOf(b);
+                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                if (aIdx !== -1) return -1;
+                if (bIdx !== -1) return 1;
+                return 0;
+            }
+        }
+        
+        // Sort mainnets by priority
+        const aIndex = NETWORK_PRIORITY.indexOf(a);
+        const bIndex = NETWORK_PRIORITY.indexOf(b);
+        if (aIndex === -1 && bIndex === -1) return 0;
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+    });
+    
+    if (networkIds.length === 0) {
         listContainer.innerHTML = `
             <div class="network-list-empty">
                 <p>No networks found</p>
-                <p style="font-size: 11px; margin-top: 8px;">Enable more networks in Settings → Network → Manage Networks</p>
+                <p style="font-size: 11px; margin-top: 8px;">Enable more networks in Settings → Manage Networks</p>
             </div>
         `;
         return;
     }
     
-    listContainer.innerHTML = filteredNetworks.map(([id, network]) => {
+    // Render flat list
+    listContainer.innerHTML = networkIds.map(id => {
+        const network = NETWORKS[id];
         const isSelected = id === currentNetwork;
-        // Show USD balance for this network
         const balanceUSD = getNetworkBalanceUSD(id);
         const balanceDisplay = balanceUSD > 0 ? formatCurrency(balanceUSD) : '$0.00';
+        const colorStyle = network.color ? `border-left-color: ${network.color};` : '';
+        const testnetBadge = network.testnet ? '<span class="network-testnet-badge">TESTNET</span>' : '';
         
         return `
-            <div class="network-list-item ${isSelected ? 'selected' : ''}" data-network="${id}">
+            <div class="network-list-item ${isSelected ? 'selected' : ''} ${network.testnet ? 'testnet' : ''}" data-network="${id}" style="${colorStyle}">
                 <img class="network-item-icon img-fallback" src="${network.icon}" data-fallback="../assets/token-icons/eth.svg" alt="">
                 <div class="network-item-info">
-                    <div class="network-item-name">${network.name}</div>
+                    <div class="network-item-name">${network.name}${testnetBadge}</div>
                     <div class="network-item-chain" style="color: ${balanceUSD > 0 ? 'var(--success)' : 'var(--text-muted)'}">${balanceDisplay}</div>
                 </div>
                 <svg class="network-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -1035,7 +1192,6 @@ function populateNetworkList(filter = '') {
             e.preventDefault();
             e.stopPropagation();
             
-            // Find the network-list-item element (in case click was on child)
             const networkItem = e.target.closest('.network-list-item');
             const networkId = networkItem?.dataset?.network;
             
@@ -1069,6 +1225,9 @@ async function selectNetwork(networkId) {
         await chrome.storage.local.set({ currentNetwork: currentNetwork });
         console.log(`[NET] Network changed to: ${NETWORKS[currentNetwork].name}`);
         
+        // Save to recent networks
+        await saveToRecentNetworks(networkId);
+        
         // Update UI
         updateNetworkSelectorDisplay(networkId);
         
@@ -1101,6 +1260,10 @@ function setupNetworkModalListeners() {
     const modal = document.getElementById('networkModal');
     const closeBtn = document.getElementById('networkModalClose');
     const searchInput = document.getElementById('networkSearchInput');
+    const searchToggle = document.getElementById('networkSearchToggle');
+    const searchContainer = document.getElementById('networkSearchContainer');
+    const searchClear = document.getElementById('networkSearchClear');
+    const testnetToggle = document.getElementById('showTestnetsToggle');
     
     // Close button
     closeBtn?.addEventListener('click', closeNetworkModal);
@@ -1112,9 +1275,34 @@ function setupNetworkModalListeners() {
         }
     });
     
+    // Search toggle button
+    searchToggle?.addEventListener('click', () => {
+        searchContainer?.classList.toggle('hidden');
+        if (!searchContainer?.classList.contains('hidden')) {
+            searchInput?.focus();
+        } else {
+            if (searchInput) searchInput.value = '';
+            populateNetworkList('');
+        }
+    });
+    
+    // Search clear button
+    searchClear?.addEventListener('click', () => {
+        if (searchInput) searchInput.value = '';
+        populateNetworkList('');
+        searchInput?.focus();
+    });
+    
     // Search input
     searchInput?.addEventListener('input', (e) => {
         populateNetworkList(e.target.value);
+    });
+    
+    // Testnet button toggle
+    testnetToggle?.addEventListener('click', () => {
+        showTestnets = !showTestnets;
+        testnetToggle.classList.toggle('active', showTestnets);
+        populateNetworkList(searchInput?.value || '');
     });
     
     // Escape key to close
@@ -1124,6 +1312,9 @@ function setupNetworkModalListeners() {
         }
     });
 }
+
+// Testnet visibility flag
+let showTestnets = false;
 
 function updateNetworkSelectorDisplay(networkId) {
     const network = NETWORKS[networkId];

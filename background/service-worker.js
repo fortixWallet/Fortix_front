@@ -14,65 +14,232 @@ if (PRODUCTION_MODE) {
 // Import ethers.js
 importScripts('../libs/ethers.min.js');
 
-// Network configurations
+// ═══════════════════════════════════════════════════════════════════════════════
+// NETWORKS CONFIGURATION (37 mainnet chains)
+// Version: 2.0.0 | Last updated: 2025-12-13
 // NOTE: All RPC calls should go through backend for production
 // These public RPCs are fallbacks only
+// ═══════════════════════════════════════════════════════════════════════════════
 const NETWORKS = {
+    // TIER 1: Ethereum & Major L2s
     '1': { 
         rpc: 'https://eth.llamarpc.com',
-        fallbackRpcs: ['https://ethereum.publicnode.com', 'https://rpc.ankr.com/eth'],
-        chainId: 1, 
-        name: 'Ethereum',
-        symbol: 'ETH',
-        explorer: 'https://etherscan.io'
-    },
-    '56': { 
-        rpc: 'https://bsc-dataseed1.binance.org',
-        fallbackRpcs: ['https://bsc-dataseed2.binance.org', 'https://bsc.publicnode.com'],
-        chainId: 56, 
-        name: 'BNB Chain',
-        symbol: 'BNB',
-        explorer: 'https://bscscan.com'
-    },
-    '137': { 
-        rpc: 'https://polygon.llamarpc.com',
-        fallbackRpcs: ['https://polygon-rpc.com', 'https://polygon.publicnode.com'],
-        chainId: 137, 
-        name: 'Polygon',
-        symbol: 'MATIC',
-        explorer: 'https://polygonscan.com'
-    },
-    '42161': { 
-        rpc: 'https://arbitrum.llamarpc.com',
-        fallbackRpcs: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum.publicnode.com'],
-        chainId: 42161, 
-        name: 'Arbitrum',
-        symbol: 'ETH',
-        explorer: 'https://arbiscan.io'
-    },
-    '10': { 
-        rpc: 'https://optimism.llamarpc.com',
-        fallbackRpcs: ['https://mainnet.optimism.io', 'https://optimism.publicnode.com'],
-        chainId: 10, 
-        name: 'Optimism',
-        symbol: 'ETH',
-        explorer: 'https://optimistic.etherscan.io'
+        fallbackRpcs: ['https://ethereum.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.drpc.org'],
+        chainId: 1, name: 'Ethereum', symbol: 'ETH', explorer: 'https://etherscan.io'
     },
     '8453': { 
         rpc: 'https://mainnet.base.org',
-        fallbackRpcs: ['https://base.llamarpc.com', 'https://base.publicnode.com'],
-        chainId: 8453, 
-        name: 'Base',
-        symbol: 'ETH',
-        explorer: 'https://basescan.org'
+        fallbackRpcs: ['https://base.llamarpc.com', 'https://base.publicnode.com', 'https://base.drpc.org'],
+        chainId: 8453, name: 'Base', symbol: 'ETH', explorer: 'https://basescan.org'
+    },
+    '42161': { 
+        rpc: 'https://arbitrum.llamarpc.com',
+        fallbackRpcs: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum.publicnode.com', 'https://arbitrum.drpc.org'],
+        chainId: 42161, name: 'Arbitrum One', symbol: 'ETH', explorer: 'https://arbiscan.io'
+    },
+    '10': { 
+        rpc: 'https://optimism.llamarpc.com',
+        fallbackRpcs: ['https://mainnet.optimism.io', 'https://optimism.publicnode.com', 'https://optimism.drpc.org'],
+        chainId: 10, name: 'Optimism', symbol: 'ETH', explorer: 'https://optimistic.etherscan.io'
+    },
+    '137': { 
+        rpc: 'https://polygon.llamarpc.com',
+        fallbackRpcs: ['https://polygon-rpc.com', 'https://polygon.publicnode.com', 'https://polygon.drpc.org'],
+        chainId: 137, name: 'Polygon', symbol: 'POL', explorer: 'https://polygonscan.com'
+    },
+    '56': { 
+        rpc: 'https://bsc-dataseed1.binance.org',
+        fallbackRpcs: ['https://bsc-dataseed2.binance.org', 'https://bsc.publicnode.com', 'https://bsc.drpc.org'],
+        chainId: 56, name: 'BNB Chain', symbol: 'BNB', explorer: 'https://bscscan.com'
     },
     '43114': { 
         rpc: 'https://avalanche-c-chain.publicnode.com',
-        fallbackRpcs: ['https://api.avax.network/ext/bc/C/rpc', 'https://rpc.ankr.com/avalanche'],
-        chainId: 43114, 
-        name: 'Avalanche',
-        symbol: 'AVAX',
-        explorer: 'https://snowtrace.io'
+        fallbackRpcs: ['https://api.avax.network/ext/bc/C/rpc', 'https://rpc.ankr.com/avalanche', 'https://avalanche.drpc.org'],
+        chainId: 43114, name: 'Avalanche', symbol: 'AVAX', explorer: 'https://snowtrace.io'
+    },
+    // ZK Rollups
+    '324': { 
+        rpc: 'https://mainnet.era.zksync.io',
+        fallbackRpcs: ['https://zksync.drpc.org', 'https://zksync-era.blockpi.network/v1/rpc/public'],
+        chainId: 324, name: 'zkSync Era', symbol: 'ETH', explorer: 'https://explorer.zksync.io'
+    },
+    '534352': { 
+        rpc: 'https://rpc.scroll.io',
+        fallbackRpcs: ['https://scroll.drpc.org', 'https://scroll-mainnet.public.blastapi.io'],
+        chainId: 534352, name: 'Scroll', symbol: 'ETH', explorer: 'https://scrollscan.com'
+    },
+    '59144': { 
+        rpc: 'https://rpc.linea.build',
+        fallbackRpcs: ['https://linea.drpc.org', 'https://linea-mainnet.public.blastapi.io'],
+        chainId: 59144, name: 'Linea', symbol: 'ETH', explorer: 'https://lineascan.build'
+    },
+    '1101': { 
+        rpc: 'https://zkevm-rpc.com',
+        fallbackRpcs: ['https://polygon-zkevm.drpc.org', 'https://rpc.polygon-zkevm.gateway.fm'],
+        chainId: 1101, name: 'Polygon zkEVM', symbol: 'ETH', explorer: 'https://zkevm.polygonscan.com'
+    },
+    // L2 & Rollups
+    '81457': { 
+        rpc: 'https://rpc.blast.io',
+        fallbackRpcs: ['https://blast.drpc.org', 'https://blast-mainnet.public.blastapi.io'],
+        chainId: 81457, name: 'Blast', symbol: 'ETH', explorer: 'https://blastscan.io'
+    },
+    '5000': { 
+        rpc: 'https://rpc.mantle.xyz',
+        fallbackRpcs: ['https://mantle.drpc.org', 'https://mantle-mainnet.public.blastapi.io'],
+        chainId: 5000, name: 'Mantle', symbol: 'MNT', explorer: 'https://mantlescan.xyz'
+    },
+    '42170': { 
+        rpc: 'https://nova.arbitrum.io/rpc',
+        fallbackRpcs: ['https://arbitrum-nova.drpc.org', 'https://arbitrum-nova.public.blastapi.io'],
+        chainId: 42170, name: 'Arbitrum Nova', symbol: 'ETH', explorer: 'https://nova.arbiscan.io'
+    },
+    '167000': { 
+        rpc: 'https://rpc.mainnet.taiko.xyz',
+        fallbackRpcs: ['https://taiko.drpc.org', 'https://rpc.taiko.tools'],
+        chainId: 167000, name: 'Taiko', symbol: 'ETH', explorer: 'https://taikoscan.io'
+    },
+    // Alt L1s
+    '250': { 
+        rpc: 'https://rpc.ftm.tools',
+        fallbackRpcs: ['https://fantom.publicnode.com', 'https://fantom.drpc.org', 'https://rpcapi.fantom.network'],
+        chainId: 250, name: 'Fantom', symbol: 'FTM', explorer: 'https://ftmscan.com'
+    },
+    '100': { 
+        rpc: 'https://rpc.gnosischain.com',
+        fallbackRpcs: ['https://gnosis.drpc.org', 'https://gnosis.publicnode.com'],
+        chainId: 100, name: 'Gnosis', symbol: 'xDAI', explorer: 'https://gnosisscan.io'
+    },
+    '42220': { 
+        rpc: 'https://forno.celo.org',
+        fallbackRpcs: ['https://celo.drpc.org', 'https://rpc.ankr.com/celo'],
+        chainId: 42220, name: 'Celo', symbol: 'CELO', explorer: 'https://celoscan.io'
+    },
+    '1329': { 
+        rpc: 'https://evm-rpc.sei-apis.com',
+        fallbackRpcs: ['https://sei.drpc.org', 'https://evm-rpc.sei.io'],
+        chainId: 1329, name: 'Sei', symbol: 'SEI', explorer: 'https://seitrace.com'
+    },
+    '50': { 
+        rpc: 'https://rpc.xinfin.network',
+        fallbackRpcs: ['https://erpc.xinfin.network', 'https://rpc1.xinfin.network'],
+        chainId: 50, name: 'XDC Network', symbol: 'XDC', explorer: 'https://xdcscan.io'
+    },
+    // Gaming & NFT
+    '1284': { 
+        rpc: 'https://rpc.api.moonbeam.network',
+        fallbackRpcs: ['https://moonbeam.drpc.org', 'https://moonbeam.publicnode.com'],
+        chainId: 1284, name: 'Moonbeam', symbol: 'GLMR', explorer: 'https://moonscan.io'
+    },
+    '1285': { 
+        rpc: 'https://rpc.api.moonriver.moonbeam.network',
+        fallbackRpcs: ['https://moonriver.drpc.org', 'https://moonriver.publicnode.com'],
+        chainId: 1285, name: 'Moonriver', symbol: 'MOVR', explorer: 'https://moonriver.moonscan.io'
+    },
+    '7777777': { 
+        rpc: 'https://rpc.zora.energy',
+        fallbackRpcs: ['https://zora.drpc.org'],
+        chainId: 7777777, name: 'Zora', symbol: 'ETH', explorer: 'https://explorer.zora.energy'
+    },
+    '33139': { 
+        rpc: 'https://rpc.apechain.com/http',
+        fallbackRpcs: ['https://apechain.drpc.org'],
+        chainId: 33139, name: 'ApeChain', symbol: 'APE', explorer: 'https://apescan.io'
+    },
+    '747474': { 
+        rpc: 'https://ronin.lgns.net/rpc',
+        fallbackRpcs: ['https://api.roninchain.com/rpc'],
+        chainId: 747474, name: 'Katana', symbol: 'RON', explorer: 'https://app.roninchain.com'
+    },
+    // BNB Ecosystem
+    '204': { 
+        rpc: 'https://opbnb-mainnet-rpc.bnbchain.org',
+        fallbackRpcs: ['https://opbnb.drpc.org', 'https://opbnb-mainnet.public.blastapi.io'],
+        chainId: 204, name: 'opBNB', symbol: 'BNB', explorer: 'https://opbnbscan.com'
+    },
+    // Emerging Chains
+    '80094': { 
+        rpc: 'https://rpc.berachain.com',
+        fallbackRpcs: ['https://berachain.drpc.org'],
+        chainId: 80094, name: 'Berachain', symbol: 'BERA', explorer: 'https://berascan.io'
+    },
+    '146': { 
+        rpc: 'https://rpc.soniclabs.com',
+        fallbackRpcs: ['https://sonic.drpc.org'],
+        chainId: 146, name: 'Sonic', symbol: 'S', explorer: 'https://sonicscan.org'
+    },
+    '999': { 
+        rpc: 'https://rpc.hyperliquid.xyz/evm',
+        fallbackRpcs: [],
+        chainId: 999, name: 'HyperEVM', symbol: 'HYPE', explorer: 'https://explorer.hyperliquid.xyz'
+    },
+    '480': { 
+        rpc: 'https://worldchain-mainnet.g.alchemy.com/public',
+        fallbackRpcs: ['https://worldchain.drpc.org'],
+        chainId: 480, name: 'World Chain', symbol: 'ETH', explorer: 'https://worldscan.org'
+    },
+    '1923': { 
+        rpc: 'https://swell-mainnet.alt.technology',
+        fallbackRpcs: ['https://rpc.swellnetwork.io'],
+        chainId: 1923, name: 'Swell Chain', symbol: 'ETH', explorer: 'https://explorer.swellnetwork.io'
+    },
+    '2741': { 
+        rpc: 'https://api.mainnet.abs.xyz',
+        fallbackRpcs: ['https://abstract.drpc.org'],
+        chainId: 2741, name: 'Abstract', symbol: 'ETH', explorer: 'https://abscan.org'
+    },
+    '252': { 
+        rpc: 'https://rpc.frax.com',
+        fallbackRpcs: ['https://fraxtal.drpc.org'],
+        chainId: 252, name: 'Fraxtal', symbol: 'frxETH', explorer: 'https://fraxscan.com'
+    },
+    '199': { 
+        rpc: 'https://rpc.bittorrentchain.io',
+        fallbackRpcs: ['https://bittorrent.drpc.org'],
+        chainId: 199, name: 'BitTorrent Chain', symbol: 'BTT', explorer: 'https://bttcscan.com'
+    },
+    '130': { 
+        rpc: 'https://mainnet.unichain.org',
+        fallbackRpcs: ['https://unichain.drpc.org'],
+        chainId: 130, name: 'Unichain', symbol: 'ETH', explorer: 'https://uniscan.xyz'
+    },
+    '143': { 
+        rpc: 'https://rpc.monad.xyz',
+        fallbackRpcs: [],
+        chainId: 143, name: 'Monad', symbol: 'MON', explorer: 'https://explorer.monad.xyz'
+    },
+    '988': { 
+        rpc: 'https://rpc.stablechain.io',
+        fallbackRpcs: [],
+        chainId: 988, name: 'Stable Chain', symbol: 'ETH', explorer: 'https://explorer.stablechain.io'
+    },
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // TESTNETS
+    // ═══════════════════════════════════════════════════════════════════════════════
+    '11155111': { 
+        rpc: 'https://rpc.sepolia.org',
+        fallbackRpcs: ['https://sepolia.drpc.org', 'https://ethereum-sepolia.publicnode.com'],
+        chainId: 11155111, name: 'Sepolia', symbol: 'ETH', explorer: 'https://sepolia.etherscan.io', testnet: true
+    },
+    '80002': { 
+        rpc: 'https://rpc-amoy.polygon.technology',
+        fallbackRpcs: ['https://polygon-amoy.drpc.org'],
+        chainId: 80002, name: 'Polygon Amoy', symbol: 'POL', explorer: 'https://amoy.polygonscan.com', testnet: true
+    },
+    '421614': { 
+        rpc: 'https://sepolia-rollup.arbitrum.io/rpc',
+        fallbackRpcs: ['https://arbitrum-sepolia.drpc.org'],
+        chainId: 421614, name: 'Arbitrum Sepolia', symbol: 'ETH', explorer: 'https://sepolia.arbiscan.io', testnet: true
+    },
+    '11155420': { 
+        rpc: 'https://sepolia.optimism.io',
+        fallbackRpcs: ['https://optimism-sepolia.drpc.org'],
+        chainId: 11155420, name: 'Optimism Sepolia', symbol: 'ETH', explorer: 'https://sepolia-optimism.etherscan.io', testnet: true
+    },
+    '84532': { 
+        rpc: 'https://sepolia.base.org',
+        fallbackRpcs: ['https://base-sepolia.drpc.org'],
+        chainId: 84532, name: 'Base Sepolia', symbol: 'ETH', explorer: 'https://sepolia.basescan.org', testnet: true
     }
 };
 

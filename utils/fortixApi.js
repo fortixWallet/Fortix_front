@@ -8,32 +8,91 @@ const FORTIX_API_BASE = 'https://api.fortixwallet.com';
 const API_TIMEOUT = 30000; // 30 seconds
 
 /**
- * Chain mapping for FortiX Backend
+ * Chain mapping for FortiX Backend (37 chains)
+ * Version: 2.0.0 | Last updated: 2025-12-13
  */
 const CHAIN_MAPPING = {
     '1': 'ethereum',
-    '56': 'bsc',
-    '137': 'polygon',
-    '42161': 'arbitrum',
     '10': 'optimism',
+    '56': 'bsc',
+    '100': 'gnosis',
+    '137': 'polygon',
+    '204': 'opbnb',
+    '250': 'fantom',
+    '324': 'zksync',
+    '480': 'worldchain',
+    '534352': 'scroll',
     '8453': 'base',
+    '42161': 'arbitrum',
+    '42170': 'arbitrumnova',
     '43114': 'avalanche',
-    'solana': 'solana',
-    '250': 'fantom'
+    '59144': 'linea',
+    '81457': 'blast',
+    '1101': 'polygonzkevm',
+    '1284': 'moonbeam',
+    '1285': 'moonriver',
+    '1329': 'sei',
+    '5000': 'mantle',
+    '7777777': 'zora',
+    '33139': 'apechain',
+    '42220': 'celo',
+    '80094': 'berachain',
+    '146': 'sonic',
+    '167000': 'taiko',
+    '252': 'fraxtal',
+    '199': 'bittorrent',
+    '130': 'unichain',
+    '50': 'xdc',
+    '999': 'hyperevm',
+    '1923': 'swell',
+    '2741': 'abstract',
+    '143': 'monad',
+    '747474': 'ronin',
+    '988': 'stablechain',
+    'solana': 'solana'
 };
 
 /**
- * Reverse chain mapping (name to chainId)
+ * Reverse chain mapping (name to chainId) - 37 chains
  */
 const CHAIN_IDS = {
     'ethereum': '1',
-    'bsc': '56',
-    'polygon': '137',
-    'arbitrum': '42161',
     'optimism': '10',
+    'bsc': '56',
+    'gnosis': '100',
+    'polygon': '137',
+    'opbnb': '204',
+    'fantom': '250',
+    'zksync': '324',
+    'worldchain': '480',
+    'scroll': '534352',
     'base': '8453',
+    'arbitrum': '42161',
+    'arbitrumnova': '42170',
     'avalanche': '43114',
-    'fantom': '250'
+    'linea': '59144',
+    'blast': '81457',
+    'polygonzkevm': '1101',
+    'moonbeam': '1284',
+    'moonriver': '1285',
+    'sei': '1329',
+    'mantle': '5000',
+    'zora': '7777777',
+    'apechain': '33139',
+    'celo': '42220',
+    'berachain': '80094',
+    'sonic': '146',
+    'taiko': '167000',
+    'fraxtal': '252',
+    'bittorrent': '199',
+    'unichain': '130',
+    'xdc': '50',
+    'hyperevm': '999',
+    'swell': '1923',
+    'abstract': '2741',
+    'monad': '143',
+    'ronin': '747474',
+    'stablechain': '988'
 };
 
 /**

@@ -63,7 +63,27 @@ const TRUSTWALLET_CHAINS = {
     '1285': 'moonriver',
     '25': 'cronos',
     '128': 'heco',
-    '66': 'okexchain'
+    '66': 'okexchain',
+    // New chains
+    '59144': 'linea',
+    '324': 'zksync',
+    '534352': 'scroll',
+    '81457': 'blast',
+    '5000': 'mantle',
+    '42220': 'celo',
+    '42170': 'arbitrum', // Arbitrum Nova uses same assets as Arbitrum
+    '1101': 'polygonzkevm',
+    '7777777': 'zora',
+    '204': 'opbnb',
+    '146': 'sonic',
+    '199': 'bttc',
+    '252': 'fraxtal',
+    '480': 'worldchain',
+    '1329': 'sei',
+    '33139': 'apechain',
+    '80094': 'berachain',
+    '167000': 'taiko',
+    '2020': 'ronin'
 };
 
 // Token icons - separate from network icons!
@@ -74,15 +94,39 @@ const TOKEN_ICONS = {
     WETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png',
     MATIC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
     WMATIC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270/logo.png',
+    POL: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
     BNB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png',
     WBNB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c/logo.png',
     AVAX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png',
     WAVAX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7/logo.png',
+    FTM: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png',
+    WFTM: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/assets/0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83/logo.png',
+    CELO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/celo/info/logo.png',
+    GLMR: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonbeam/info/logo.png',
+    MOVR: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonriver/info/logo.png',
+    xDAI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdai/info/logo.png',
+    MNT: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/mantle/info/logo.png',
+    SEI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sei/info/logo.png',
+    S: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sonic/info/logo.png',
+    RON: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ronin/info/logo.png',
+    XDC: 'https://assets.coingecko.com/coins/images/2912/small/xdc-icon.png',
+    // New chains without Trust Wallet icons - using CoinGecko
+    BERA: 'https://assets.coingecko.com/coins/images/36075/small/bera.png',
+    HONEY: 'https://assets.coingecko.com/coins/images/36076/small/honey.png',
+    BTT: 'https://assets.coingecko.com/coins/images/22457/small/btt_logo.png',
+    APE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x4d224452801ACEd8B2F0aebE155379bb5D594381/logo.png',
+    WLD: 'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
+    TAIKO: 'https://assets.coingecko.com/coins/images/37200/small/taiko.png',
+    frxETH: 'https://assets.coingecko.com/coins/images/28284/small/frxETH_icon.png',
     // Stablecoins
     USDC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png',
     USDT: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
     DAI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EedeAC495271d0F/logo.png',
     BUSD: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x4Fabb145d64652a948d72533023f6E7A623C7C53/logo.png',
+    FRAX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x853d955aCEf822Db058eb8505911ED77F175b99e/logo.png',
+    USDe: 'https://assets.coingecko.com/coins/images/33613/small/usde.png',
+    crvUSD: 'https://assets.coingecko.com/coins/images/30118/small/crvusd.png',
+    LUSD: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x5f98805A4E8be255a32880FDeC7F6728C6568bA0/logo.png',
     // Popular tokens
     WBTC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png',
     LINK: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x514910771AF9Ca656af840dff83E8264EcF986CA/logo.png',
@@ -92,22 +136,64 @@ const TOKEN_ICONS = {
     SNX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F/logo.png',
     COMP: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xc00e94Cb662C3520282E6f5717214004A7f26888/logo.png',
     MKR: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2/logo.png',
+    LDO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32/logo.png',
+    PENDLE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x808507121B80c02388fAd14726482e061B8da827/logo.png',
+    STG: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6/logo.png',
+    GRT: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xc944E90C64B2c07662A292be6244BDf05Cda44a7/logo.png',
     // L2 tokens
     ARB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png',
     OP: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/assets/0x4200000000000000000000000000000000000042/logo.png',
-    // Base tokens
+    ZK: 'https://assets.coingecko.com/coins/images/38043/small/ZKTokenBlack.png',
+    SCR: 'https://assets.coingecko.com/coins/images/39573/small/scroll.png',
+    BLAST: 'https://assets.coingecko.com/coins/images/35494/small/blast.jpeg',
+    // LST tokens
+    stETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84/logo.png',
+    wstETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0/logo.png',
     cbETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xBe9895146f7AF43049ca1c1AE358B0541Ea49704/logo.png',
+    rETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xae78736Cd615f374D3085123A210448E74Fc6393/logo.png',
+    weETH: 'https://assets.coingecko.com/coins/images/33033/small/weETH.png',
+    ezETH: 'https://assets.coingecko.com/coins/images/34753/small/ezeth.png',
+    mETH: 'https://assets.coingecko.com/coins/images/33345/small/meth.png',
+    swETH: 'https://assets.coingecko.com/coins/images/30326/small/sweth.png',
+    // Base tokens
     USDbC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA/logo.png',
     AERO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0x940181a94A35A4569E4529A3CDfB74e38FD98631/logo.png',
+    BRETT: 'https://assets.coingecko.com/coins/images/35529/small/brett.jpeg',
+    DEGEN: 'https://assets.coingecko.com/coins/images/34515/small/degen.png',
     // Arbitrum tokens  
     GMX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a/logo.png',
     MAGIC: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0x539bdE0d7Dbd336b79148AA742883198BBF60342/logo.png',
+    GRAIL: 'https://assets.coingecko.com/coins/images/28682/small/grail.png',
+    RDNT: 'https://assets.coingecko.com/coins/images/26536/small/radiant.png',
+    GNS: 'https://assets.coingecko.com/coins/images/19737/small/gns.png',
     // BSC tokens
     CAKE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82/logo.png',
+    BTCB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c/logo.png',
+    TWT: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x4B0F1812e5Df2A09796481Ff14017e6005508003/logo.png',
     // Meme tokens
     SHIB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE/logo.png',
     PEPE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6982508145454Ce325dDbE47a25d4ec3d2311933/logo.png',
-    DOGE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/dogecoin/info/logo.png'
+    FLOKI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E/logo.png',
+    DOGE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/dogecoin/info/logo.png',
+    BONK: 'https://assets.coingecko.com/coins/images/28600/small/bonk.png',
+    WIF: 'https://assets.coingecko.com/coins/images/33566/small/wif.png',
+    // Gaming
+    AXS: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xBB0E17EF65F82Ab018d8EDd776e8DD940327B28b/logo.png',
+    SLP: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ronin/assets/0xa8754b9fa15fc18bb59458815510e40a12cd2014/logo.png',
+    SAND: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x3845badAde8e6dFF049820680d1F14bD3903a5d0/logo.png',
+    MANA: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x0F5D2fB29fb7d3CFeE444a200298f468908cC942/logo.png',
+    IMX: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xF57e7e7C23978C3cAEC3C3548E3D615c346e79fF/logo.png',
+    // Other
+    GNO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6810e776880C02933D47DB1b9fc05908e5386b96/logo.png',
+    ENS: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png',
+    RNDR: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6De037ef9aD2725EB40118Bb1702EBb27e4Aeb24/logo.png',
+    FET: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xaea46A60368A7bD060eec7DF8CBa43b7EF41Ad85/logo.png',
+    '1INCH': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x111111111117dC0aa78b770fA6A738034120C302/logo.png',
+    VELO: 'https://assets.coingecko.com/coins/images/25783/small/velo.png',
+    JOE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0x6e84a6216eA6dACC71eE8E6b0a5B7322EEbC0fDd/logo.png',
+    QUICK: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/assets/0x831753DD7087CaC61aB5644b308642cc1c33Dc13/logo.png',
+    BAL: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xba100000625a3754423978a60c9317c58a424e3D/logo.png',
+    SUSHI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B3595068778DD592e39A122f4f5a5cF09C90fE2/logo.png'
 };
 
 // Get token icon from Trust Wallet CDN or local fallback
@@ -125,10 +211,10 @@ function getTokenIcon(symbol, address = null, networkId = null) {
     // Use NETWORKS chain if available, otherwise TRUSTWALLET_CHAINS
     const chain = NETWORKS[chainId]?.chain || TRUSTWALLET_CHAINS[chainId];
     
-    // If we have a valid contract address, use Trust Wallet CDN
+    // If we have a valid contract address, use Trust Wallet GitHub
     // Address should be checksummed (from service-worker via ethers.getAddress)
     if (address && chain && address !== 'native' && /^0x[a-fA-F0-9]{40}$/.test(address)) {
-        return `https://assets-cdn.trustwallet.com/blockchains/${chain}/assets/${address}/logo.png`;
+        return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${address}/logo.png`;
     }
     
     // For native tokens or unknown - use local icons with sanitization

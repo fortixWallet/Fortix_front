@@ -548,7 +548,8 @@ async function fetchNetworkBalance(networkId) {
 
 // Fetch all network balances with USD values
 async function fetchAllNetworkBalances() {
-    const networks = ['1', '8453', '42161', '10', '137', '56', '43114'];
+    // Use enabled networks that have CHAIN_MAPPING (swap support)
+    const networks = enabledNetworks.filter(id => FortixAPI.CHAIN_MAPPING && FortixAPI.CHAIN_MAPPING[id]);
     
     // First, get all native token prices
     const prices = await fetchNativeTokenPrices();

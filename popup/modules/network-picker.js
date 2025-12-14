@@ -1,8 +1,9 @@
 // ============ NETWORK PICKER FUNCTIONS ============
 
-// Network categories
-const POPULAR_NETWORKS = ['1', '8453', '42161', '10'];
-const OTHER_NETWORKS = ['137', '56', '43114'];
+// Network categories (37 chains)
+// Version: 2.0.0 | Last updated: 2025-12-13
+const POPULAR_NETWORKS = ['1', '8453', '42161', '10', '137', '56'];
+const OTHER_NETWORKS = ['43114', '324', '534352', '59144', '1101', '81457', '5000', '42170', '167000', '250', '100', '42220', '1329', '50', '1284', '1285', '7777777', '33139', '747474', '204', '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988'];
 
 // Populate network picker dropdowns
 function populateNetworkPickers() {

@@ -77,8 +77,19 @@ async function openNetworkPickerModal(type) {
     const listContainer = document.getElementById('networkPickerList');
     const currentSelected = document.getElementById(type === 'from' ? 'swapFromNetwork' : 'swapToNetwork').value;
     
-    // Available networks for swap/bridge
-    const networks = ['1', '8453', '42161', '10', '137', '56', '43114'];
+    // Priority order for sorting (popular first)
+    const NETWORK_PRIORITY = [
+        '1', '8453', '42161', '10', '137', '56', '43114', // Tier 1
+        '324', '534352', '59144', '1101', // ZK
+        '81457', '5000', '42170', '167000', // L2
+        '250', '100', '42220', '1329', '50', // Alt L1
+        '1284', '1285', '7777777', '33139', '747474', // Gaming
+        '204', // opBNB
+        '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988' // Emerging
+    ];
+    
+    // Available networks for swap/bridge - all enabled networks that have CHAIN_MAPPING
+    const networks = enabledNetworks.filter(id => FortixAPI.CHAIN_MAPPING[id]);
     
     const isFromSelector = type === 'from';
     
@@ -93,19 +104,28 @@ async function openNetworkPickerModal(type) {
         await fetchAllNetworkBalances();
     }
     
-    // Sort networks: networks with balance first (for FROM)
+    // Sort networks: networks with balance first (for FROM), by priority for TO
     const sortedNetworks = [...networks].sort((a, b) => {
+        // Selected network comes first
+        if (a === currentSelected) return -1;
+        if (b === currentSelected) return 1;
+        
         if (isFromSelector) {
+            // For FROM: sort by balance (higher first)
             const balA = multiNetworkBalances[a] || 0;
             const balB = multiNetworkBalances[b] || 0;
             if (balA > 0 && balB === 0) return -1;
             if (balA === 0 && balB > 0) return 1;
-            if (balA > 0 && balB > 0) return balB - balA; // Higher balance first
+            if (balA > 0 && balB > 0) return balB - balA;
         }
-        // Selected network comes first
-        if (a === currentSelected) return -1;
-        if (b === currentSelected) return 1;
-        return 0;
+        
+        // Then by priority
+        const aIndex = NETWORK_PRIORITY.indexOf(a);
+        const bIndex = NETWORK_PRIORITY.indexOf(b);
+        if (aIndex === -1 && bIndex === -1) return 0;
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
     });
     
     // Filter: for FROM, only show networks with balance

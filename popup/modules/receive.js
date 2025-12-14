@@ -110,7 +110,8 @@ function openReceiveNetworkPicker() {
     const listContainer = document.getElementById('receiveNetworkPickerList');
     const currentSelected = document.getElementById('receiveNetwork').value;
     
-    const networks = ['1', '8453', '42161', '10', '137', '56', '43114'];
+    // Show all enabled networks
+    const networks = enabledNetworks;
     
     listContainer.innerHTML = networks.map(networkId => {
         const network = NETWORKS[networkId];
