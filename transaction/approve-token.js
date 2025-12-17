@@ -98,7 +98,7 @@ async function loadApprovalData() {
 
 function updateUI() {
     // Site/Origin
-    const siteName = approvalData.origin || 'Forge Wallet';
+    const siteName = approvalData.origin || 'FortiX Wallet';
     try {
         document.getElementById('siteName').textContent = new URL(siteName).hostname;
     } catch {

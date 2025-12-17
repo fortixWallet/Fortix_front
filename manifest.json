@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Forge Wallet",
-  "version": "0.0.21",
+  "name": "FortiX Wallet",
+  "version": "0.0.27",
   "description": "Free ERC-20 token transfers. Multi-chain wallet with swap & bridge. GoPlus Security protection. Supports Ethereum, Polygon, Arbitrum, Optimism, Base, BNB, Avalanche.",
-  "homepage_url": "https://forge-eth.io",
-  "author": "FORGE ETH",
+  "homepage_url": "https://fortixwallet.com",
+  "author": "FortiX",
   
   "icons": {
     "16": "assets/icons/icon-16.png",

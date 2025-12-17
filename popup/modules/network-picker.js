@@ -5,6 +5,251 @@
 const POPULAR_NETWORKS = ['1', '8453', '42161', '10', '137', '56'];
 const OTHER_NETWORKS = ['43114', '324', '534352', '59144', '1101', '81457', '5000', '42170', '167000', '250', '100', '42220', '1329', '50', '1284', '1285', '7777777', '33139', '747474', '204', '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988'];
 
+// ============ QUOTE AUTO-REFRESH SYSTEM ============
+// Auto-refresh quotes every 10 seconds to keep prices fresh
+// Stops: on modal close, TX execution, cancel
+// Continues: after approval (for crosschain)
+
+let quoteRefreshInterval = null;
+let isMaxModeActive = false; // Track if MAX button was clicked
+const QUOTE_REFRESH_INTERVAL_MS = 10000; // 10 seconds
+
+/**
+ * Start quote auto-refresh
+ * Refreshes quote every 10 seconds
+ */
+function startQuoteRefresh() {
+    // Stop any existing refresh first
+    stopQuoteRefresh();
+
+    console.log('[QUOTE-REFRESH] Starting auto-refresh (every 10s)');
+
+    quoteRefreshInterval = setInterval(() => {
+        refreshQuoteSilently();
+    }, QUOTE_REFRESH_INTERVAL_MS);
+}
+
+/**
+ * Stop quote auto-refresh
+ */
+function stopQuoteRefresh() {
+    if (quoteRefreshInterval) {
+        clearInterval(quoteRefreshInterval);
+        quoteRefreshInterval = null;
+        console.log('[QUOTE-REFRESH] Stopped auto-refresh');
+    }
+}
+
+/**
+ * Refresh quote silently (no loading spinner, just update values)
+ * If MAX mode: recalculate amount with new fees
+ * If NOT max: check if balance still sufficient for gas
+ */
+async function refreshQuoteSilently() {
+    const fromAmount = document.getElementById('swapFromAmount')?.value;
+    if (!fromAmount || parseFloat(fromAmount) <= 0) {
+        console.log('[QUOTE-REFRESH] No amount - skipping refresh');
+        return;
+    }
+
+    // Disable confirm button during refresh
+    const confirmBtn = document.getElementById('swapConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+    }
+
+    console.log('[QUOTE-REFRESH] Refreshing quote...', { isMaxMode: isMaxModeActive });
+
+    try {
+        if (currentSwapMode === 'bridge') {
+            // For MAX mode bridge: re-fetch with MaxCalculator to get updated fees
+            if (isMaxModeActive) {
+                await refreshMaxBridgeQuote();
+            } else {
+                await fetchBridgeQuote();
+            }
+        } else {
+            // For MAX mode swap: re-fetch with MaxCalculator
+            if (isMaxModeActive) {
+                await refreshMaxSwapQuote();
+            } else {
+                await fetchSwapQuote();
+            }
+        }
+    } catch (error) {
+        console.warn('[QUOTE-REFRESH] Error refreshing quote:', error.message);
+    }
+}
+
+/**
+ * Refresh MAX mode bridge quote - recalculates amount with new gas/fees
+ */
+async function refreshMaxBridgeQuote() {
+    const fromToken = document.getElementById('swapFromToken').value;
+    const fromNetwork = document.getElementById('swapFromNetwork').value;
+    const toNetwork = document.getElementById('swapToNetwork')?.value || currentNetwork;
+    const nativeSymbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+    const isNativeToken = fromToken === nativeSymbol || fromToken === 'ETH';
+    const isBridgeMode = true;
+
+    // Get current balances
+    let nativeBalance = 0;
+    let tokenBalance = 0;
+    let tokenAddress = null;
+    let tokenDecimals = 18;
+
+    if (fromNetwork === currentNetwork) {
+        nativeBalance = tokenDataCache.nativeBalance || parseFloat(currentAccount?.balance) || 0;
+    } else {
+        nativeBalance = multiNetworkBalances[fromNetwork] || 0;
+    }
+
+    if (isNativeToken) {
+        tokenBalance = nativeBalance;
+    } else if (fromNetwork === currentNetwork) {
+        const tokenAddrFromList = getTokensSync(fromNetwork)?.[fromToken]?.toLowerCase();
+        let tokenData = null;
+        if (tokenAddrFromList && tokenDataCache.balances?.[tokenAddrFromList]) {
+            tokenData = tokenDataCache.balances[tokenAddrFromList];
+            tokenAddress = tokenAddrFromList;
+        } else {
+            tokenData = Object.values(tokenDataCache.balances || {}).find(t => t.symbol === fromToken);
+            if (tokenData) tokenAddress = tokenData.address;
+        }
+        tokenBalance = tokenData ? parseFloat(tokenData.balance) || 0 : 0;
+        tokenDecimals = tokenData?.decimals || 18;
+    }
+
+    // Calculate new max amount with fresh gas prices
+    const result = await MaxCalculator.calculate({
+        operation: 'bridge',
+        tokenType: isNativeToken ? 'native' : 'erc20',
+        fromNetwork: fromNetwork,
+        toNetwork: toNetwork,
+        nativeBalance: nativeBalance,
+        tokenBalance: isNativeToken ? undefined : tokenBalance,
+        userAddress: currentAccount?.address,
+        tokenAddress: tokenAddress
+    });
+
+    if (result.success && result.maxAmount > 0) {
+        const displayDecimals = isNativeToken ? 6 : Math.min(tokenDecimals, 6);
+        const multiplier = Math.pow(10, displayDecimals);
+        const flooredAmount = Math.floor(result.maxAmount * multiplier) / multiplier;
+
+        // Update input field with new max
+        const input = document.getElementById('swapFromAmount');
+        const oldValue = input.value;
+        input.value = flooredAmount.toFixed(displayDecimals);
+
+        console.log('[QUOTE-REFRESH] MAX bridge recalculated:', {
+            oldAmount: oldValue,
+            newAmount: input.value,
+            gasReserve: result.gasReserve.toFixed(6)
+        });
+
+        // Fetch quote with new amount (temporarily disable MAX mode to prevent loop)
+        swapIsMaxAmount = false;
+        await fetchBridgeQuote();
+    } else {
+        console.warn('[QUOTE-REFRESH] MAX recalc failed:', result.error);
+    }
+}
+
+/**
+ * Refresh MAX mode swap quote - recalculates amount with new gas
+ */
+async function refreshMaxSwapQuote() {
+    const fromToken = document.getElementById('swapFromToken').value;
+    const fromNetwork = document.getElementById('swapFromNetwork').value;
+    const nativeSymbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+    const isNativeToken = fromToken === nativeSymbol || fromToken === 'ETH';
+
+    // Get current balances
+    let nativeBalance = 0;
+    let tokenBalance = 0;
+    let tokenAddress = null;
+    let tokenDecimals = 18;
+
+    if (fromNetwork === currentNetwork) {
+        nativeBalance = tokenDataCache.nativeBalance || parseFloat(currentAccount?.balance) || 0;
+    } else {
+        nativeBalance = multiNetworkBalances[fromNetwork] || 0;
+    }
+
+    if (isNativeToken) {
+        tokenBalance = nativeBalance;
+    } else if (fromNetwork === currentNetwork) {
+        const tokenAddrFromList = getTokensSync(fromNetwork)?.[fromToken]?.toLowerCase();
+        let tokenData = null;
+        if (tokenAddrFromList && tokenDataCache.balances?.[tokenAddrFromList]) {
+            tokenData = tokenDataCache.balances[tokenAddrFromList];
+            tokenAddress = tokenAddrFromList;
+        } else {
+            tokenData = Object.values(tokenDataCache.balances || {}).find(t => t.symbol === fromToken);
+            if (tokenData) tokenAddress = tokenData.address;
+        }
+        tokenBalance = tokenData ? parseFloat(tokenData.balance) || 0 : 0;
+        tokenDecimals = tokenData?.decimals || 18;
+    }
+
+    // Calculate new max amount with fresh gas prices
+    const result = await MaxCalculator.calculate({
+        operation: 'swap',
+        tokenType: isNativeToken ? 'native' : 'erc20',
+        fromNetwork: fromNetwork,
+        nativeBalance: nativeBalance,
+        tokenBalance: isNativeToken ? undefined : tokenBalance,
+        userAddress: currentAccount?.address,
+        tokenAddress: tokenAddress
+    });
+
+    if (result.success && result.maxAmount > 0) {
+        const displayDecimals = isNativeToken ? 6 : Math.min(tokenDecimals, 6);
+        const multiplier = Math.pow(10, displayDecimals);
+        const flooredAmount = Math.floor(result.maxAmount * multiplier) / multiplier;
+
+        // Update input field with new max
+        const input = document.getElementById('swapFromAmount');
+        const oldValue = input.value;
+        input.value = flooredAmount.toFixed(displayDecimals);
+
+        console.log('[QUOTE-REFRESH] MAX swap recalculated:', {
+            oldAmount: oldValue,
+            newAmount: input.value,
+            gasReserve: result.gasReserve.toFixed(6)
+        });
+
+        // Fetch quote with new amount (temporarily disable MAX mode to prevent loop)
+        swapIsMaxAmount = false;
+        await fetchSwapQuote();
+    } else {
+        console.warn('[QUOTE-REFRESH] MAX recalc failed:', result.error);
+    }
+}
+
+/**
+ * Clear MAX mode state and deactivate button
+ */
+function clearMaxModeState() {
+    isMaxModeActive = false;
+    const maxBtn = document.getElementById('swapMaxBtn');
+    if (maxBtn) {
+        maxBtn.classList.remove('active');
+    }
+}
+
+/**
+ * Handle input change - stop refresh and clear MAX mode
+ * Called immediately on user input (before debounced quote fetch)
+ */
+function handleSwapInputChange() {
+    // Stop refresh when user manually types
+    stopQuoteRefresh();
+    // Clear MAX mode since user is manually entering amount
+    clearMaxModeState();
+}
+
 // Populate network picker dropdowns
 function populateNetworkPickers() {
     populateNetworkDropdown('bridgeFromDropdown', 'from');
@@ -171,13 +416,20 @@ async function updateSwapBalances() {
 function updateSwapFromUSD() {
     const fromAmount = document.getElementById('swapFromAmount').value;
     const fromAmountNum = parseFloat(fromAmount) || 0;
-    const price = ethPrice || 3000;
-    
-    document.getElementById('swapFromValue').textContent = `≈ ${formatCurrency(fromAmountNum * price)}`;
+    // Get price from BalanceManager (NO HARDCODED FALLBACK)
+    const price = BalanceManager.getNativePrice(currentNetwork) || ethPrice || 0;
+
+    document.getElementById('swapFromValue').textContent = price > 0
+        ? `≈ ${formatCurrency(fromAmountNum * price)}`
+        : '≈ $--';
 }
 
 // Handle token change
 async function onSwapTokenChange() {
+    // Stop quote refresh and clear MAX mode when tokens change
+    stopQuoteRefresh();
+    clearMaxModeState();
+
     // Clear quote first
     document.getElementById('swapToAmount').value = '';
     hideSimulationPreview();
@@ -186,16 +438,16 @@ async function onSwapTokenChange() {
     document.getElementById('swapConfirmBtn').disabled = true;
     currentSwapQuote = null;
     currentBridgeQuote = null;
-    
+
     // VARIANT A: Clear ready state when tokens change
     if (typeof clearSwapReadyState === 'function') {
         clearSwapReadyState();
     }
-    
+
     // Refresh balance for new token
     await refreshSwapBalances();
-    
-    // Refetch quote if amount exists
+
+    // Refetch quote if amount exists (this will restart refresh on success)
     const amount = document.getElementById('swapFromAmount').value;
     if (amount && parseFloat(amount) > 0) {
         fetchSwapQuote();
@@ -204,15 +456,19 @@ async function onSwapTokenChange() {
 
 // Swap token direction
 async function swapTokenDirection() {
+    // Stop quote refresh and clear MAX mode when swapping direction
+    stopQuoteRefresh();
+    clearMaxModeState();
+
     const fromToken = document.getElementById('swapFromToken').value;
     const toToken = document.getElementById('swapToToken').value;
     const chainId = getSwapChainId();
-    
+
     // Swap amounts
     const fromAmount = document.getElementById('swapFromAmount');
     const toAmount = document.getElementById('swapToAmount');
     const newFromAmount = toAmount.value;
-    
+
     // Clear to amount first
     toAmount.value = '';
     
@@ -249,93 +505,117 @@ async function swapTokenDirection() {
 // Set max amount for swap
 async function setSwapMaxAmount() {
     swapIsMaxAmount = true; // Mark that user clicked MAX for $0.01 buffer adjustment
-    
+
+    // Activate MAX mode UI
+    isMaxModeActive = true;
+    const maxBtn = document.getElementById('swapMaxBtn');
+    if (maxBtn) {
+        maxBtn.classList.add('active');
+    }
+
     const fromToken = document.getElementById('swapFromToken').value;
     const fromNetwork = document.getElementById('swapFromNetwork').value;
+    const toNetwork = document.getElementById('swapToNetwork')?.value || currentNetwork;
     const nativeSymbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
-    
-    let balance = 0;
-    let maxAmount = 0;
-    
+
     // Check if the token is native for the selected FROM network
     const isNativeToken = fromToken === nativeSymbol || fromToken === 'ETH';
-    
-    if (isNativeToken) {
-        // Native token - need to reserve gas
-        // Get balance from multiNetworkBalances if different network, otherwise from cache
-        if (fromNetwork === currentNetwork) {
-            balance = tokenDataCache.nativeBalance || parseFloat(currentAccount?.balance) || 0;
-        } else {
-            balance = multiNetworkBalances[fromNetwork] || 0;
-        }
-        
-        // Calculate MAX with realtime gas (swap operation, 1.2x multiplier)
-        const result = await calculateMaxAmount(fromNetwork, balance, 'swap', 1.2);
-        
-        if (result.success) {
-            maxAmount = result.maxAmount;
-            console.log(`[BALANCE] Swap MAX (native on ${fromNetwork}):`, {
-                balance: balance.toFixed(6),
-                gasReserve: result.reserveAmount.toFixed(6),
-                maxSwap: maxAmount.toFixed(6),
-                isFallback: result.isFallback || false
-            });
-            
-            // Start watcher for auto-update
-            startMaxWatcher('swap', 'swapFromAmount', fromNetwork, balance, 'swap', 1.2);
-        }
+    const isBridgeMode = currentSwapMode === 'bridge';
+    const operation = isBridgeMode ? 'bridge' : 'swap';
+
+    // Get balances
+    let nativeBalance = 0;
+    let tokenBalance = 0;
+    let tokenAddress = null;
+    let tokenDecimals = 18;
+
+    if (fromNetwork === currentNetwork) {
+        nativeBalance = tokenDataCache.nativeBalance || parseFloat(currentAccount?.balance) || 0;
     } else {
-        // ERC20 token - can use full balance (gas paid in native)
-        // Only works for current network (we don't have ERC20 balances for other networks)
-        if (fromNetwork === currentNetwork) {
-            const tokenData = Object.values(tokenDataCache.balances || {}).find(t => t.symbol === fromToken);
-            balance = tokenData ? parseFloat(tokenData.balance) || 0 : 0;
-        }
-        maxAmount = balance;
-        
-        console.log(`[BALANCE] Swap MAX (token):`, {
-            token: fromToken,
-            network: fromNetwork,
-            balanceRaw: balance,
-            balancePrecise: balance.toFixed(18),
-            maxSwap: maxAmount,
-            decimalsForDisplay: TOKEN_DECIMALS[fromToken] <= 6 ? 2 : 6
-        });
+        nativeBalance = multiNetworkBalances[fromNetwork] || 0;
     }
-    
-    if (maxAmount > 0) {
+
+    if (isNativeToken) {
+        tokenBalance = nativeBalance;
+    } else {
+        // ERC20 token - only available for current network
+        if (fromNetwork === currentNetwork) {
+            // Try to find by address first (more reliable), then by symbol
+            const tokenAddrFromList = getTokensSync(fromNetwork)?.[fromToken]?.toLowerCase();
+            let tokenData = null;
+            if (tokenAddrFromList && tokenDataCache.balances?.[tokenAddrFromList]) {
+                tokenData = tokenDataCache.balances[tokenAddrFromList];
+                tokenAddress = tokenAddrFromList;
+            } else {
+                // Fallback: search by symbol
+                tokenData = Object.values(tokenDataCache.balances || {}).find(t => t.symbol === fromToken);
+                if (tokenData) {
+                    tokenAddress = tokenData.address;
+                }
+            }
+            tokenBalance = tokenData ? parseFloat(tokenData.balance) || 0 : 0;
+            tokenDecimals = tokenData?.decimals || 18;
+        }
+    }
+
+    // Use unified MaxCalculator
+    const result = await MaxCalculator.calculate({
+        operation: operation,
+        tokenType: isNativeToken ? 'native' : 'erc20',
+        fromNetwork: fromNetwork,
+        toNetwork: isBridgeMode ? toNetwork : undefined,
+        nativeBalance: nativeBalance,
+        tokenBalance: isNativeToken ? undefined : tokenBalance,
+        userAddress: currentAccount?.address,
+        tokenAddress: tokenAddress
+        // No spenderAddress yet - MaxCalculator will assume approval needed for ERC20
+    });
+
+    if (result.success && result.maxAmount > 0) {
+        const maxAmount = result.maxAmount;
+
         // Format based on token type - ALWAYS round DOWN to never exceed balance!
-        const decimals = isNativeToken ? 6 : (TOKEN_DECIMALS[fromToken] <= 6 ? 2 : 6);
-        // Use floor to ensure we never exceed actual balance
-        const multiplier = Math.pow(10, decimals);
+        const displayDecimals = isNativeToken ? 6 : Math.min(tokenDecimals, 6);
+        const multiplier = Math.pow(10, displayDecimals);
         const flooredAmount = Math.floor(maxAmount * multiplier) / multiplier;
-        
-        console.log(`[NUM] MAX rounding:`, {
-            original: maxAmount,
-            decimals: decimals,
-            floored: flooredAmount,
-            willDisplay: flooredAmount.toFixed(decimals)
+
+        console.log(`[MAX] ${operation} MAX calculated:`, {
+            tokenType: isNativeToken ? 'native' : 'erc20',
+            balance: (isNativeToken ? nativeBalance : tokenBalance).toFixed(6),
+            gasReserve: result.gasReserve.toFixed(6),
+            maxAmount: flooredAmount.toFixed(displayDecimals),
+            needsApproval: result.needsApproval
         });
-        
-        document.getElementById('swapFromAmount').value = flooredAmount.toFixed(decimals);
-        
+
+        // Show warning if ERC20 and insufficient native for gas
+        if (!isNativeToken && !result.validation.sufficient) {
+            const symbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+            showToast(`Low ${symbol} for gas: need ${result.validation.requiredNative?.toFixed(6) || '?'}, have ${result.validation.availableNative?.toFixed(6) || '?'}`, 'warning');
+        }
+
+        document.getElementById('swapFromAmount').value = flooredAmount.toFixed(displayDecimals);
+
         // Check mode and fetch appropriate quote
-        if (currentSwapMode === 'bridge') {
-            // Bridge mode - fetch bridge quote
+        if (isBridgeMode) {
             fetchBridgeQuote();
         } else {
-            // Swap mode - only fetch if from and to tokens are different
             const toToken = document.getElementById('swapToToken').value;
             if (fromToken !== toToken) {
                 fetchSwapQuote();
             } else {
                 console.log('[WARN] Same token selected, skipping quote fetch');
-                document.getElementById('swapToAmount').value = flooredAmount.toFixed(decimals);
+                document.getElementById('swapToAmount').value = flooredAmount.toFixed(displayDecimals);
             }
+        }
+
+        // Start watcher for auto-update (native only, swap mode only)
+        if (isNativeToken && !isBridgeMode) {
+            startMaxWatcher('swap', 'swapFromAmount', fromNetwork, nativeBalance, 'swap', 1.2, 'swapConfirmBtn');
         }
     } else {
         document.getElementById('swapFromAmount').value = '';
-        showToast('Insufficient balance', 'error');
+        const errorMsg = result.error || 'Insufficient balance';
+        showToast(errorMsg, 'error');
     }
 }
 
@@ -421,6 +701,9 @@ async function fetchBridgeQuote() {
         const fromChainName = FortixAPI.getChainName(fromChainId);
         const toChainName = FortixAPI.getChainName(toChainId);
         
+        // Calculate auto slippage based on amount and type
+        const autoSlippage = getAutoSlippageBasisPoints(fromAmount, fromNetwork, 'bridge');
+
         const quote = await FortixAPI.getSwapQuote({
             fromChain: fromChainName,
             toChain: toChainName,
@@ -428,48 +711,112 @@ async function fetchBridgeQuote() {
             toToken: toTokenAddress,
             amount: amountWei,
             userAddress: currentAccount.address,
-            slippage: 100 // 1% for bridges
+            slippage: autoSlippage // Auto slippage based on amount
         });
         
         console.log('Bridge quote received from FortixAPI:', quote);
         
-        // ============ MAX AMOUNT $0.01 BUFFER ADJUSTMENT ============
-        // If user clicked MAX, adjust amount to be $0.01 less than actual balance
+        // ============ MAX AMOUNT BRIDGE FEE ADJUSTMENT ============
+        // Rango/aggregators include bridge fees in transaction value
+        // If user clicked MAX, we need to reserve space for bridge fees
         if (swapIsMaxAmount && quote.data) {
-            const fromTokenPrice = parseFloat(quote.data.fromTokenPrice) || 
-                                   parseFloat(quote.data.action?.fromToken?.priceUSD) || 0;
-            
-            if (fromTokenPrice > 0) {
-                const currentAmount = parseFloat(fromAmount);
-                const currentValueUsd = currentAmount * fromTokenPrice;
-                
-                // Subtract $0.01 buffer
-                const safeValueUsd = Math.floor((currentValueUsd - 0.01) * 100) / 100;
-                
-                if (safeValueUsd > 0) {
-                    const safeAmount = safeValueUsd / fromTokenPrice;
-                    // Round down to 6 decimals
-                    const safeAmountRounded = Math.floor(safeAmount * 1000000) / 1000000;
-                    
-                    if (safeAmountRounded < currentAmount) {
-                        console.log('[MAX] Adjusting bridge amount with $0.01 buffer:', {
-                            originalAmount: currentAmount,
-                            originalUsd: currentValueUsd.toFixed(2),
-                            safeUsd: safeValueUsd.toFixed(2),
-                            safeAmount: safeAmountRounded,
-                            tokenPrice: fromTokenPrice
+            const rawResponse = quote.data.rawResponse || quote.data;
+            const currentAmountWei = BigInt(amountWei);
+            const nativeBalance = BalanceManager.getNativeBalance(fromNetwork) || 0;
+            const nativeSymbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+            const currentAmount = parseFloat(fromAmount);
+
+            let bridgeFee = 0;
+            let needsAdjustment = false;
+
+            if (isNativeToken) {
+                // NATIVE TOKEN BRIDGE (BNB→ETH, ETH→MATIC, etc.)
+                // tx.value includes amount + bridge fees
+
+                // Check for requiredBalance from Rango (includes bridge fees)
+                let requiredBalanceWei = null;
+                if (rawResponse.requiredBalance) {
+                    requiredBalanceWei = BigInt(rawResponse.requiredBalance);
+                } else if (quote.data.requiredBalance) {
+                    requiredBalanceWei = BigInt(quote.data.requiredBalance);
+                }
+
+                // Also check transaction value - if it's higher than amount, that's the fee
+                const txValue = rawResponse.tx?.value || rawResponse.transaction?.value || quote.data.transaction?.value;
+                if (!requiredBalanceWei && txValue) {
+                    const txValueWei = BigInt(txValue);
+                    if (txValueWei > currentAmountWei) {
+                        requiredBalanceWei = txValueWei;
+                    }
+                }
+
+                if (requiredBalanceWei && requiredBalanceWei > currentAmountWei) {
+                    const bridgeFeeWei = requiredBalanceWei - currentAmountWei;
+                    bridgeFee = Number(bridgeFeeWei) / 1e18;
+                    needsAdjustment = true;
+                }
+            } else {
+                // ERC20 TOKEN BRIDGE (USDT→USDT, USDC→USDC, etc.)
+                // tx.value contains native fee for bridging (separate from token amount)
+
+                const txValue = rawResponse.tx?.value || rawResponse.transaction?.value || quote.data.transaction?.value;
+                if (txValue) {
+                    const txValueWei = BigInt(txValue);
+                    if (txValueWei > 0) {
+                        // This is the native fee required for bridging ERC20
+                        bridgeFee = Number(txValueWei) / 1e18;
+
+                        // For ERC20, check if user has enough native for fees
+                        // MaxCalculator already reserved gas, but bridge fee is extra
+                        const gasReserve = 0.001; // Rough estimate for gas
+                        if (nativeBalance < bridgeFee + gasReserve) {
+                            showToast(`Insufficient ${nativeSymbol} for bridge fees. Need ~${(bridgeFee + gasReserve).toFixed(6)} ${nativeSymbol}`, 'error');
+                            hideLoader();
+                            swapIsMaxAmount = false;
+                            return;
+                        }
+                        // ERC20 amount doesn't need adjustment - only native balance matters
+                        console.log('[MAX] ERC20 bridge - native fee required:', {
+                            bridgeFee: bridgeFee.toFixed(8),
+                            nativeBalance: nativeBalance,
+                            sufficient: nativeBalance >= bridgeFee + gasReserve
                         });
-                        
-                        // Update input field
-                        document.getElementById('swapFromAmount').value = safeAmountRounded.toFixed(6);
-                        fromAmount = safeAmountRounded.toFixed(6);
-                        
-                        // Re-fetch quote with adjusted amount
-                        swapIsMaxAmount = false; // Prevent infinite loop
-                        return fetchBridgeQuote();
                     }
                 }
             }
+
+            if (needsAdjustment && bridgeFee > 0) {
+                // Calculate safe amount: balance - bridgeFee - small buffer
+                const gasBuffer = 0.0001; // Small buffer for gas price changes
+                const safeAmount = nativeBalance - bridgeFee - gasBuffer;
+                const safeAmountRounded = Math.floor(safeAmount * 1000000) / 1000000;
+
+                console.log('[MAX] Bridge fee detected from quote:', {
+                    tokenType: isNativeToken ? 'native' : 'erc20',
+                    currentAmount: currentAmount,
+                    bridgeFee: bridgeFee.toFixed(8),
+                    bridgeFeeUsd: (bridgeFee * (BalanceManager.getNativePrice(fromNetwork) || 0)).toFixed(2),
+                    nativeBalance: nativeBalance,
+                    safeAmount: safeAmountRounded,
+                    adjustment: (currentAmount - safeAmountRounded).toFixed(8)
+                });
+
+                if (safeAmountRounded > 0 && safeAmountRounded < currentAmount) {
+                    // Update input field with adjusted amount
+                    document.getElementById('swapFromAmount').value = safeAmountRounded.toFixed(6);
+                    fromAmount = safeAmountRounded.toFixed(6);
+
+                    // Re-fetch quote with adjusted amount
+                    swapIsMaxAmount = false; // Prevent infinite loop
+                    return fetchBridgeQuote();
+                } else if (safeAmountRounded <= 0) {
+                    showToast(`Insufficient ${nativeSymbol} for bridge fees (${bridgeFee.toFixed(6)} ${nativeSymbol} required)`, 'error');
+                    hideLoader();
+                    swapIsMaxAmount = false;
+                    return;
+                }
+            }
+
             swapIsMaxAmount = false;
         }
         
@@ -484,15 +831,22 @@ async function fetchBridgeQuote() {
         currentBridgeQuote._quoteRequest = {
             fromChain: fromChainName,
             toChain: toChainName,
+            fromChainId: fromChainId,  // Numeric chain ID for gas API
+            toChainId: toChainId,
             fromToken: fromTokenAddress,
             toToken: toTokenAddress,
             amount: amountWei,
             userAddress: currentAccount.address,
-            slippage: 100,
+            slippage: autoSlippage, // Auto slippage (same as quote request)
             fromTokenSymbol: fromToken,
             toTokenSymbol: toToken,
             fromAmount: fromAmount
         };
+
+        // Store selectedQuote for execute - includes requestId for route consistency
+        // This prevents Rango from returning a different route on execute
+        currentBridgeQuote._selectedQuote = quote.data;
+        currentBridgeQuote._selectedQuoteTimestamp = Date.now();
 
         // Store token info for display
         currentBridgeQuote._fromTokenAddress = fromTokenAddress;
@@ -502,91 +856,93 @@ async function fetchBridgeQuote() {
         // Update UI fields (toAmount, USD values, mode text)
         displayBridgeQuote(adaptedQuote, fromAmount);
         
-        // ============ SIMULATION PREVIEW ============
-        // Show transaction simulation right after getting quote
-        if (adaptedQuote.transactionRequest) {
-            try {
-                const txData = {
-                    to: adaptedQuote.transactionRequest.to,
-                    data: adaptedQuote.transactionRequest.data,
-                    value: adaptedQuote.transactionRequest.value || '0x0',
-                    gasLimit: adaptedQuote.transactionRequest.gasLimit || adaptedQuote.transactionRequest.gas,
-                    gasPrice: adaptedQuote.transactionRequest.gasPrice
+        // ============ GAS PREVIEW ============
+        // Show gas preview - uses aggregator data or RPC fallback (NO simulation)
+        try {
+            // Build txData from whatever is available (can be empty - RPC fallback will handle)
+            const txData = {
+                to: adaptedQuote.transactionRequest?.to || '',
+                data: adaptedQuote.transactionRequest?.data || '',
+                value: adaptedQuote.transactionRequest?.value || '0x0',
+                gasLimit: adaptedQuote.transactionRequest?.gasLimit || adaptedQuote.transactionRequest?.gas || quote.estimatedGas || quote.gas,
+                gasPrice: adaptedQuote.transactionRequest?.gasPrice || quote.gasPrice
+            };
+
+            const simulation = await buildTransactionPreview(txData, currentBridgeQuote._quoteRequest, adaptedQuote);
+            if (simulation) {
+                // Build quote info for unified preview
+                const toAmountRaw = parseFloat(adaptedQuote.estimate?.toAmount || quote.outputAmount || 0);
+                const toDecimals = adaptedQuote.action?.toToken?.decimals || 18;
+                const toAmountNum = toAmountRaw / (10 ** toDecimals);
+                const rate = toAmountNum / parseFloat(fromAmount);
+                const bridgeSlippage = calculateSmartSlippage(parseFloat(fromAmount), toAmountNum, 'bridge');
+                const minReceived = toAmountNum * (1 - bridgeSlippage / 100);
+
+                // Get provider info
+                const aggregatorKey = (quote.aggregator || quote.tool || 'fortix').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const aggregatorInfo = AGGREGATORS[aggregatorKey] || {
+                    name: quote.aggregator || quote.tool || 'FORTIX',
+                    logo: quote.toolDetails?.logoURI || null
                 };
-                
-                const simulation = await buildTransactionPreview(txData, currentBridgeQuote._quoteRequest, adaptedQuote);
-                if (simulation) {
-                    // Build quote info for unified preview
-                    const toAmountRaw = parseFloat(adaptedQuote.estimate?.toAmount || quote.outputAmount || 0);
-                    const toDecimals = adaptedQuote.action?.toToken?.decimals || 18;
-                    const toAmountNum = toAmountRaw / (10 ** toDecimals);
-                    const rate = toAmountNum / parseFloat(fromAmount);
-                    const bridgeSlippage = calculateSmartSlippage(parseFloat(fromAmount), toAmountNum, 'bridge');
-                    const minReceived = toAmountNum * (1 - bridgeSlippage / 100);
-                    
-                    // Get provider info
-                    const aggregatorKey = (quote.aggregator || quote.tool || 'fortix').toLowerCase().replace(/[^a-z0-9]/g, '');
-                    const aggregatorInfo = AGGREGATORS[aggregatorKey] || { 
-                        name: quote.aggregator || quote.tool || 'FORTIX', 
-                        logo: quote.toolDetails?.logoURI || null 
-                    };
-                    
-                    // Get route string
-                    const bridgeTool = quote.tool || quote.toolDetails?.name || '';
-                    const bridgeToolInfo = AGGREGATORS[bridgeTool.toLowerCase().replace(/[^a-z0-9]/g, '')];
-                    const displayTool = bridgeToolInfo?.name || bridgeTool;
-                    const routeSteps = quote.estimate?.route?.steps || quote.route?.steps || quote.includedSteps || [];
-                    let routeString = '';
-                    if (routeSteps.length > 0) {
-                        routeString = routeSteps.map(s => {
-                            const stepTool = s.tool || s.type || s.toolDetails?.name || '';
-                            const stepInfo = AGGREGATORS[stepTool.toLowerCase().replace(/[^a-z0-9]/g, '')];
-                            return stepInfo?.name || stepTool;
-                        }).filter(Boolean).join(' → ');
-                    } else if (displayTool) {
-                        routeString = `via ${displayTool}`;
-                    }
-                    
-                    // Get estimated time
-                    const executionTime = quote.estimate?.executionDuration || 300;
-                    const estTimeString = executionTime > 60 ? `~${Math.ceil(executionTime / 60)} mins` : `~${executionTime} secs`;
-                    
-                    // Get bridge fee
-                    let bridgeFeeString = '';
-                    const feeCost = quote.estimate?.feeCosts?.[0];
-                    if (feeCost && parseFloat(feeCost.amount) > 0) {
-                        const feeDecimals = feeCost.token?.decimals || 18;
-                        const feeAmount = parseFloat(feeCost.amount) / (10 ** feeDecimals);
-                        const feeUsd = parseFloat(feeCost.amountUSD || 0);
-                        bridgeFeeString = `${formatTokenBalance(feeAmount, feeCost.token?.symbol || 'ETH')} ${feeCost.token?.symbol || 'ETH'} (~${formatCurrency(feeUsd)})`;
-                    }
-                    
-                    const quoteInfo = {
-                        isBridge: true,
-                        provider: {
-                            name: aggregatorInfo.name,
-                            logo: aggregatorInfo.logo || quote.toolDetails?.logoURI
-                        },
-                        route: routeString,
-                        estTime: estTimeString,
-                        bridgeFee: bridgeFeeString,
-                        rate: `1 ${fromToken} = ${formatTokenBalance(rate, toToken)} ${toToken}`,
-                        priceImpact: (adaptedQuote.estimate?.priceImpact || 0).toFixed(2) + '%',
-                        slippage: `${bridgeSlippage.toFixed(1)}% (auto)`,
-                        mevProtection: false, // No MEV protection for bridges
-                        minReceived: `${formatTokenBalance(minReceived, toToken)} ${toToken}`
-                    };
-                    
-                    console.log('[SIM] Bridge preview ready:', simulation.source, simulation.confidence + '%');
-                    showSimulationPreview(simulation, quoteInfo);
-                    
-                    // Enable confirm button
-                    document.getElementById('swapConfirmBtn').disabled = false;
+
+                // Get route string
+                const bridgeTool = quote.tool || quote.toolDetails?.name || '';
+                const bridgeToolInfo = AGGREGATORS[bridgeTool.toLowerCase().replace(/[^a-z0-9]/g, '')];
+                const displayTool = bridgeToolInfo?.name || bridgeTool;
+                const routeSteps = quote.estimate?.route?.steps || quote.route?.steps || quote.includedSteps || [];
+                let routeString = '';
+                if (routeSteps.length > 0) {
+                    routeString = routeSteps.map(s => {
+                        const stepTool = s.tool || s.type || s.toolDetails?.name || '';
+                        const stepInfo = AGGREGATORS[stepTool.toLowerCase().replace(/[^a-z0-9]/g, '')];
+                        return stepInfo?.name || stepTool;
+                    }).filter(Boolean).join(' → ');
+                } else if (displayTool) {
+                    routeString = `via ${displayTool}`;
                 }
-            } catch (simError) {
-                console.warn('[SIM] Could not build bridge preview:', simError.message);
-                hideSimulationPreview();
+
+                // Get estimated time
+                const executionTime = quote.estimate?.executionDuration || 300;
+                const estTimeString = executionTime > 60 ? `~${Math.ceil(executionTime / 60)} mins` : `~${executionTime} secs`;
+
+                // Get bridge fee
+                let bridgeFeeString = '';
+                const feeCost = quote.estimate?.feeCosts?.[0];
+                if (feeCost && parseFloat(feeCost.amount) > 0) {
+                    const feeDecimals = feeCost.token?.decimals || 18;
+                    const feeAmount = parseFloat(feeCost.amount) / (10 ** feeDecimals);
+                    const feeUsd = parseFloat(feeCost.amountUSD || 0);
+                    bridgeFeeString = `${formatTokenBalance(feeAmount, feeCost.token?.symbol || 'ETH')} ${feeCost.token?.symbol || 'ETH'} (~${formatCurrency(feeUsd)})`;
+                }
+
+                const quoteInfo = {
+                    isBridge: true,
+                    provider: {
+                        name: aggregatorInfo.name,
+                        logo: aggregatorInfo.logo || quote.toolDetails?.logoURI
+                    },
+                    route: routeString,
+                    estTime: estTimeString,
+                    bridgeFee: bridgeFeeString,
+                    rate: `1 ${fromToken} = ${formatTokenBalance(rate, toToken)} ${toToken}`,
+                    priceImpact: (adaptedQuote.estimate?.priceImpact || 0).toFixed(2) + '%',
+                    slippage: `${bridgeSlippage.toFixed(1)}% (auto)`,
+                    mevProtection: false, // No MEV protection for bridges
+                    minReceived: `${formatTokenBalance(minReceived, toToken)} ${toToken}`
+                };
+
+                console.log('[GAS] Bridge preview ready:', simulation.source, simulation.confidence + '%');
+                showSimulationPreview(simulation, quoteInfo);
+
+                // Enable confirm button
+                document.getElementById('swapConfirmBtn').disabled = false;
+
+                // Start quote auto-refresh (every 6 seconds)
+                startQuoteRefresh();
             }
+        } catch (simError) {
+            console.warn('[GAS] Could not build bridge preview:', simError.message);
+            hideSimulationPreview();
         }
 
         // NOTE: Approval check moved to execution phase (when user clicks Bridge button)
@@ -596,6 +952,7 @@ async function fetchBridgeQuote() {
         console.error('Bridge quote error:', error);
         currentBridgeQuote = null;
         showSwapError(error.message || 'Failed to get bridge quote');
+        stopQuoteRefresh(); // Stop refresh on error
     } finally {
         document.getElementById('swapLoading').style.display = 'none';
     }
@@ -760,6 +1117,7 @@ function adaptFortixBridgeQuote(fortixQuote, fromSymbol, toSymbol, fromDecimals,
         // Additional data
         aggregator: data.aggregator,
         rawResponse: data.rawResponse || {},
+        estimatedGas: data.estimatedGas,  // Gas limit from aggregator
         _original: data
     };
 }
@@ -876,24 +1234,39 @@ function displayBridgeQuote(quote, fromAmount) {
 }
 
 // Calculate smart slippage based on amount, price impact, and type
+// Returns slippage as PERCENTAGE (e.g., 1.5 = 1.5%)
+// TODO: Replace with recommendedSlippage from API when backend adds it
 function calculateSmartSlippage(fromAmount, toAmount, type = 'swap', priceImpact = 0, amountUsdOverride = null) {
     // Base slippage
     let slippage = 0.5;
-    
-    // Calculate actual price difference (for bridges this is the fee impact)
-    const priceDiff = priceImpact || (fromAmount > 0 ? ((fromAmount - toAmount) / fromAmount) * 100 : 0);
-    
+
+    // Use priceImpact from API (not calculated from amounts - that's wrong for different tokens!)
+    const priceDiff = Math.abs(parseFloat(priceImpact) || 0);
+
+    // Get native price from BalanceManager (NO HARDCODED FALLBACK)
+    const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice || 0;
     // Adjust slippage based on amount size
-    const amountUsd = amountUsdOverride || (fromAmount * (ethPrice || 3000));
-    
+    const amountUsd = amountUsdOverride || (nativePrice > 0 ? fromAmount * nativePrice : 0);
+
     if (type === 'bridge') {
-        // Bridges typically need higher slippage due to price fluctuations between chains
-        if (amountUsd > 10000) {
-            slippage = 1.0; // Large bridge = 1%
+        // Cross-chain bridges need higher slippage due to:
+        // - Price fluctuations between chains
+        // - Multiple hops/steps
+        // - Liquidity variations
+        // MINIMUM 1.5% for any bridge
+        if (amountUsd > 50000) {
+            slippage = 3.0; // Very large bridge = 3%
+        } else if (amountUsd > 10000) {
+            slippage = 2.5; // Large bridge = 2.5%
         } else if (amountUsd > 1000) {
-            slippage = 0.75; // Medium = 0.75%
+            slippage = 2.0; // Medium = 2%
         } else {
-            slippage = 0.5; // Small = 0.5%
+            slippage = 1.5; // Small/any = 1.5% minimum
+        }
+
+        // Add extra slippage if price impact is high
+        if (priceDiff > 2) {
+            slippage = Math.min(slippage + priceDiff * 0.5, 5); // Max 5%
         }
     } else {
         // Swaps - smart adjustment based on price impact and liquidity
@@ -905,7 +1278,7 @@ function calculateSmartSlippage(fromAmount, toAmount, type = 'swap', priceImpact
             slippage = Math.min(priceDiff + 1, 5); // Dynamic, max 5%
         } else if (priceDiff > 1) {
             // Medium impact
-            slippage = 1.0;
+            slippage = 1.5;
         } else if (amountUsd > 50000) {
             // Very large swap - higher slippage for safety
             slippage = 1.5;
@@ -920,9 +1293,51 @@ function calculateSmartSlippage(fromAmount, toAmount, type = 'swap', priceImpact
             slippage = 0.3;
         }
     }
-    
-    console.log('[TARGET] Smart slippage:', { type, amountUsd: amountUsd.toFixed(2), priceImpact: priceDiff.toFixed(2), slippage });
+
+    console.log('[SLIPPAGE] Smart slippage calculated:', { type, amountUsd: amountUsd?.toFixed(2) || '?', priceImpact: priceDiff.toFixed(2), slippage: slippage + '%' });
     return slippage;
+}
+
+// Calculate auto slippage for API request (before quote, without toAmount)
+// Returns slippage in BASIS POINTS (e.g., 150 = 1.5%)
+function getAutoSlippageBasisPoints(fromAmount, fromNetwork, type = 'swap') {
+    // Get token price for USD calculation
+    const nativePrice = BalanceManager.getNativePrice(fromNetwork) || ethPrice || 0;
+    const amountUsd = nativePrice > 0 ? parseFloat(fromAmount) * nativePrice : 0;
+
+    let slippagePercent;
+
+    if (type === 'bridge') {
+        // Cross-chain bridges need higher slippage due to:
+        // - Price fluctuations between chains
+        // - Multiple hops/steps in route
+        // - Liquidity variations across chains
+        // MINIMUM 1.5% for any bridge transaction
+        if (amountUsd > 50000) {
+            slippagePercent = 3.0; // Very large = 3%
+        } else if (amountUsd > 10000) {
+            slippagePercent = 2.5; // Large = 2.5%
+        } else if (amountUsd > 1000) {
+            slippagePercent = 2.0; // Medium = 2%
+        } else {
+            slippagePercent = 1.5; // Small/any = 1.5% minimum
+        }
+    } else {
+        // Same-chain swaps - tighter slippage possible
+        if (amountUsd > 50000) {
+            slippagePercent = 1.5;
+        } else if (amountUsd > 10000) {
+            slippagePercent = 1.0;
+        } else if (amountUsd > 1000) {
+            slippagePercent = 0.5;
+        } else {
+            slippagePercent = 0.5; // Minimum 0.5% for swaps
+        }
+    }
+
+    const basisPoints = Math.round(slippagePercent * 100);
+    console.log('[SLIPPAGE] Auto slippage for API:', { type, fromAmount, amountUsd: amountUsd.toFixed(2), slippagePercent: slippagePercent + '%', basisPoints });
+    return basisPoints;
 }
 
 // Fetch swap quote from 0x API
@@ -1029,6 +1444,10 @@ async function fetchSwapQuote() {
         
         // Use FortixAPI instead of direct 0x call
         const chainName = FortixAPI.getChainName(chainId);
+
+        // Calculate auto slippage for swap
+        const autoSwapSlippage = getAutoSlippageBasisPoints(fromAmount, currentNetwork, 'swap');
+
         const quote = await FortixAPI.getSwapQuote({
             fromChain: chainName,
             toChain: chainName,
@@ -1036,7 +1455,7 @@ async function fetchSwapQuote() {
             toToken: buyToken,
             amount: sellAmount,
             userAddress: currentAccount.address,
-            slippage: Math.round(swapSlippage * 100) // Convert to basis points
+            slippage: autoSwapSlippage // Auto slippage based on amount
         });
         
         console.log('Swap quote received from FortixAPI:', quote);
@@ -1092,67 +1511,74 @@ async function fetchSwapQuote() {
         currentSwapQuote._quoteRequest = {
             fromChain: chainName,
             toChain: chainName,
+            fromChainId: chainId,  // Numeric chain ID for gas API
             fromToken: sellToken,
             toToken: buyToken,
             amount: sellAmount,
             userAddress: currentAccount.address,
-            slippage: Math.round(swapSlippage * 100),
+            slippage: autoSwapSlippage, // Auto slippage (same as quote request)
             fromTokenSymbol: fromToken,
             toTokenSymbol: toToken,
             fromAmount: fromAmount
         };
 
+        // Store selectedQuote for execute - includes requestId for route consistency
+        currentSwapQuote._selectedQuote = quote.data;
+        currentSwapQuote._selectedQuoteTimestamp = Date.now();
+
         // Parse and display quote
         displaySwapQuote(adaptedQuote, fromToken, toToken, fromAmount);
         
-        // ============ SIMULATION PREVIEW ============
-        // Show transaction simulation right after getting quote
-        if (adaptedQuote.transaction) {
-            try {
-                const txData = {
-                    to: adaptedQuote.transaction.to,
-                    data: adaptedQuote.transaction.data,
-                    value: adaptedQuote.transaction.value || '0x0',
-                    gasLimit: adaptedQuote.transaction.gas,
-                    gasPrice: adaptedQuote.transaction.gasPrice
+        // ============ GAS PREVIEW ============
+        // Show gas preview - uses aggregator data or RPC fallback (NO simulation)
+        try {
+            // Build txData from whatever is available (can be empty - RPC fallback will handle)
+            const txData = {
+                to: adaptedQuote.transaction?.to || '',
+                data: adaptedQuote.transaction?.data || '',
+                value: adaptedQuote.transaction?.value || '0x0',
+                gasLimit: adaptedQuote.transaction?.gas || quote.estimatedGas || quote.gas,
+                gasPrice: adaptedQuote.transaction?.gasPrice || quote.gasPrice
+            };
+
+            const simulation = await buildTransactionPreview(txData, currentSwapQuote._quoteRequest, adaptedQuote);
+            if (simulation) {
+                // Build quote info for unified preview
+                const buyAmount = parseFloat(adaptedQuote.buyAmount) / (10 ** getTokenDecimals(toToken, chainId));
+                const rate = buyAmount / parseFloat(fromAmount);
+                const priceImpact = parseFloat(adaptedQuote.priceImpact) || 0;
+                const smartSlippage = calculateSmartSlippage(parseFloat(fromAmount), buyAmount, 'swap', priceImpact);
+                const minReceived = buyAmount * (1 - smartSlippage / 100);
+
+                // Get provider info
+                const aggregatorRaw = adaptedQuote.aggregator || adaptedQuote.route?.fills?.[0]?.source || 'Best Route';
+                const aggregatorKey = aggregatorRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const aggregatorInfo = AGGREGATORS[aggregatorKey] || { name: aggregatorRaw, logo: null };
+
+                const quoteInfo = {
+                    provider: {
+                        name: aggregatorInfo.name,
+                        logo: aggregatorInfo.logo
+                    },
+                    rate: `1 ${fromToken} = ${formatTokenBalance(rate, toToken)} ${toToken}`,
+                    priceImpact: priceImpact.toFixed(2) + '%',
+                    slippage: `${smartSlippage.toFixed(1)}% (auto)`,
+                    mevProtection: chainId === 1 || chainId === 8453 || chainId === 42161,
+                    minReceived: `${formatTokenBalance(minReceived, toToken)} ${toToken}`
                 };
-                
-                const simulation = await buildTransactionPreview(txData, currentSwapQuote._quoteRequest, adaptedQuote);
-                if (simulation) {
-                    // Build quote info for unified preview
-                    const buyAmount = parseFloat(adaptedQuote.buyAmount) / (10 ** getTokenDecimals(toToken, chainId));
-                    const rate = buyAmount / parseFloat(fromAmount);
-                    const priceImpact = parseFloat(adaptedQuote.priceImpact) || 0;
-                    const smartSlippage = calculateSmartSlippage(parseFloat(fromAmount), buyAmount, 'swap', priceImpact);
-                    const minReceived = buyAmount * (1 - smartSlippage / 100);
-                    
-                    // Get provider info
-                    const aggregatorRaw = adaptedQuote.aggregator || adaptedQuote.route?.fills?.[0]?.source || 'Best Route';
-                    const aggregatorKey = aggregatorRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    const aggregatorInfo = AGGREGATORS[aggregatorKey] || { name: aggregatorRaw, logo: null };
-                    
-                    const quoteInfo = {
-                        provider: {
-                            name: aggregatorInfo.name,
-                            logo: aggregatorInfo.logo
-                        },
-                        rate: `1 ${fromToken} = ${formatTokenBalance(rate, toToken)} ${toToken}`,
-                        priceImpact: priceImpact.toFixed(2) + '%',
-                        slippage: `${smartSlippage.toFixed(1)}% (auto)`,
-                        mevProtection: chainId === 1 || chainId === 8453 || chainId === 42161,
-                        minReceived: `${formatTokenBalance(minReceived, toToken)} ${toToken}`
-                    };
-                    
-                    console.log('[SIM] Swap preview ready:', simulation.source, simulation.confidence + '%');
-                    showSimulationPreview(simulation, quoteInfo);
-                    
-                    // Enable confirm button
-                    document.getElementById('swapConfirmBtn').disabled = false;
-                }
-            } catch (simError) {
-                console.warn('[SIM] Could not build swap preview:', simError.message);
-                hideSimulationPreview();
+
+                console.log('[GAS] Swap preview ready:', simulation.source, simulation.confidence + '%');
+                showSimulationPreview(simulation, quoteInfo);
+
+                // Enable confirm button
+                document.getElementById('swapConfirmBtn').disabled = false;
+
+                // Start quote auto-refresh (every 6 seconds)
+                startQuoteRefresh();
             }
+        } catch (simError) {
+            console.warn('[GAS] Could not build swap preview:', simError.message);
+            hideSimulationPreview();
         }
 
         // Check if approve is needed for ERC20 tokens
@@ -1161,6 +1587,7 @@ async function fetchSwapQuote() {
     } catch (error) {
         console.error('Swap quote error:', error);
         showSwapError(error.message || 'Failed to get quote');
+        stopQuoteRefresh(); // Stop refresh on error
     } finally {
         document.getElementById('swapLoading').style.display = 'none';
     }
@@ -1191,7 +1618,7 @@ async function checkSwapApprovalNeeded(tokenAddress, tokenSymbol, chainId) {
 // Adapt FortixAPI quote to existing displaySwapQuote format
 function adaptFortixQuote(fortixQuote, fromToken, toToken) {
     const data = fortixQuote.data || fortixQuote;
-    
+
     return {
         // Core amounts
         buyAmount: data.toAmount || data.buyAmount || '0',
@@ -1223,7 +1650,8 @@ function adaptFortixQuote(fortixQuote, fromToken, toToken) {
         executionTime: data.executionTime,
         fortiXFee: data.fortiXFee,
         priceImpact: data.priceImpact,
-        
+        estimatedGas: data.estimatedGas,  // Gas limit from aggregator
+
         // Keep original for reference
         _original: data
     };
@@ -1234,8 +1662,6 @@ function displaySwapQuote(quote, fromToken, toToken, fromAmount) {
     const chainId = getSwapChainId();
     const toDecimals = getTokenDecimals(toToken, chainId);
     const rawBuyAmount = parseFloat(quote.buyAmount) || 0;
-    
-    console.log('[SWAP] Decimals for', toToken, 'on chain', chainId, '=', toDecimals);
     
     // Get prices for USD-based sanity check
     const fromAmountNum = parseFloat(fromAmount);
@@ -1289,10 +1715,31 @@ function displaySwapQuote(quote, fromToken, toToken, fromAmount) {
                 buyAmount = convertedAmount;
                 console.log('[SWAP] Neither reasonable, defaulting to converted:', buyAmount);
             }
+        } else if (toPrice > 0 && fromAmountNum > 0) {
+            // No fromPrice but have toPrice - use toPrice for sanity check
+            // If converted value is astronomical, raw is probably correct (API already human-readable)
+            const convertedUsd = convertedAmount * toPrice;
+            const rawUsd = rawBuyAmount * toPrice;
+
+            // Heuristic: if converted USD > $1 billion, something is wrong
+            const isConvertedInsane = convertedUsd > 1e9; // > $1 billion
+            const isRawReasonable = rawUsd > 0.01 && rawUsd < 1e6; // $0.01 - $1M range
+
+            if (isConvertedInsane && isRawReasonable) {
+                buyAmount = rawBuyAmount;
+                console.log('[SWAP] No fromPrice, converted insane ($' + convertedUsd.toFixed(0) + '), using raw:', buyAmount, 'USD:', rawUsd.toFixed(2));
+            } else if (!isConvertedInsane) {
+                buyAmount = convertedAmount;
+                console.log('[SWAP] No fromPrice, using converted:', buyAmount, 'USD:', convertedUsd.toFixed(2));
+            } else {
+                // Both seem wrong - pick lesser evil
+                buyAmount = rawUsd < convertedUsd ? rawBuyAmount : convertedAmount;
+                console.log('[SWAP] No fromPrice, both weird, picked lesser:', buyAmount);
+            }
         } else {
-            // No price data - ALWAYS use standard conversion (0x, 1inch, etc. return wei)
+            // No price data at all - use standard conversion
             buyAmount = convertedAmount;
-            console.log('[SWAP] No prices, using standard wei conversion:', buyAmount);
+            console.log('[SWAP] No prices at all, using standard wei conversion:', buyAmount);
         }
     }
     
@@ -1322,12 +1769,13 @@ function displaySwapQuote(quote, fromToken, toToken, fromAmount) {
     }
 }
 
-// Get token price (from cache or estimate)
+// Get token price from cache (NO HARDCODED FALLBACKS)
+// All prices come from backend via BalanceManager/tokenDataCache
 function getTokenPrice(symbol) {
     if (!symbol) return 0;
-    
+
     const upperSymbol = symbol.toUpperCase();
-    
+
     // 1. Check tokenDataCache.prices (prices from fetchTokenPrices API)
     if (tokenDataCache.prices?.[symbol] > 0) {
         return tokenDataCache.prices[symbol];
@@ -1335,79 +1783,65 @@ function getTokenPrice(symbol) {
     if (tokenDataCache.prices?.[upperSymbol] > 0) {
         return tokenDataCache.prices[upperSymbol];
     }
-    
+
     // 2. Check tokenDataCache.balances (tokens with their prices)
     for (const token of Object.values(tokenDataCache.balances || {})) {
         if (token.symbol?.toUpperCase() === upperSymbol && token.price > 0) {
             return token.price;
         }
     }
-    
-    // 3. Check priceCache by network (for native tokens)
+
+    // 3. Check BalanceManager for native token prices (NO HARDCODED FALLBACKS)
     const chainId = getSwapChainId();
-    
-    if (upperSymbol === 'ETH' || upperSymbol === 'WETH') {
-        return priceCache?.[1] || nativeTokenPrice || ethPrice || 3500;
+
+    // Native token symbol to network mapping
+    const symbolToNetwork = {
+        'ETH': '1', 'WETH': '1',
+        'BNB': '56', 'WBNB': '56',
+        'MATIC': '137', 'WMATIC': '137', 'POL': '137',
+        'AVAX': '43114', 'WAVAX': '43114',
+        'ARB': '42161',
+        'OP': '10',
+        'FTM': '250', 'WFTM': '250',
+        'CELO': '42220',
+        'GLMR': '1284',
+        'MOVR': '1285'
+    };
+
+    const networkId = symbolToNetwork[upperSymbol];
+    if (networkId) {
+        const price = BalanceManager.getNativePrice(networkId);
+        if (price > 0) return price;
     }
-    if (upperSymbol === 'BNB' || upperSymbol === 'WBNB') {
-        return priceCache?.[56] || 700;
-    }
-    if (upperSymbol === 'MATIC' || upperSymbol === 'WMATIC' || upperSymbol === 'POL') {
-        return priceCache?.[137] || 0.50;
-    }
-    if (upperSymbol === 'AVAX' || upperSymbol === 'WAVAX') {
-        return priceCache?.[43114] || 35;
-    }
-    if (upperSymbol === 'ARB') {
-        return priceCache?.[42161] || 0.80;
-    }
-    if (upperSymbol === 'OP') {
-        return priceCache?.[10] || 2.50;
-    }
-    
+
     // Current network native token
-    if (chainId && priceCache?.[chainId]) {
+    if (chainId) {
         const networkSymbol = NETWORKS[chainId]?.symbol?.toUpperCase();
         if (networkSymbol === upperSymbol || 'W' + networkSymbol === upperSymbol) {
-            return priceCache[chainId];
+            const price = BalanceManager.getNativePrice(chainId);
+            if (price > 0) return price;
         }
     }
-    
-    // 4. Stablecoins - always $1
-    if (['USDT', 'USDC', 'USDC.E', 'USDBC', 'DAI', 'BUSD', 'FRAX', 'LUSD', 'TUSD'].includes(upperSymbol)) {
-        return 1;
-    }
-    
-    // 5. BTC variants - fallback
-    if (['WBTC', 'BTCB', 'BTC.B', 'TBTC', 'RENBTC'].includes(upperSymbol)) {
-        return 100000;
-    }
-    
-    // 6. No price found
-    console.log('[PRICE] No price found for:', symbol);
+
+    // 4. No price found - return 0 (NO HARDCODED FALLBACKS)
+    // Stablecoins and other tokens should have prices from backend
+    console.log('[PRICE] No price found for:', symbol, '- check if backend has this token');
     return 0;
 }
 
-// Fallback prices for bridge quotes when API doesn't return prices
+// Get token price - delegates to getTokenPrice (NO HARDCODED FALLBACKS)
+// All prices must come from backend
 function getTokenPriceFallback(symbol) {
-    // First try the main getTokenPrice (which checks tokenDataCache)
-    const cachedPrice = getTokenPrice(symbol);
-    if (cachedPrice > 0) {
-        return cachedPrice;
+    // Just use getTokenPrice - it checks all caches including BalanceManager
+    const price = getTokenPrice(symbol);
+    if (price > 0) {
+        return price;
     }
-    
-    // Hard-coded fallbacks as last resort
-    const fallbackPrices = {
-        'ETH': 3500, 'WETH': 3500,
-        'MATIC': 0.50, 'WMATIC': 0.50, 'POL': 0.50,
-        'BNB': 700, 'WBNB': 700,
-        'AVAX': 35, 'WAVAX': 35,
-        'FTM': 0.70, 'WFTM': 0.70,
-        'USDT': 1, 'USDC': 1, 'DAI': 1, 'BUSD': 1,
-        'WBTC': 100000, 'BTCB': 100000,
-        'ARB': 0.80, 'OP': 2.50
-    };
-    return fallbackPrices[symbol?.toUpperCase()] || 1;
+
+    // NO HARDCODED FALLBACKS - return 0 if price not available
+    // Backend whitelist.json should have all supported tokens
+    console.warn('[PRICE] getTokenPriceFallback: No price for', symbol);
+    return 0;
 }
 
 // Show swap error
@@ -1496,249 +1930,87 @@ async function approveSwapToken() {
 */
 
 /**
- * Build transaction preview using Alchemy simulation (if available) or quote data fallback
- * Alchemy supported: Ethereum, Polygon, Arbitrum, Optimism, Base
- * Fallback for: BSC, Avalanche, and others
+ * Build transaction preview using aggregator quote data
+ * Gas data comes directly from aggregator (0x, LI.FI, etc.) - no simulation needed
  */
 async function buildTransactionPreview(txData, quoteRequest, quote) {
-    console.log('[SIM] Building transaction preview...', { txData, quoteRequest, quote });
-    
+    console.log('[PREVIEW] Building transaction preview...', { quoteRequest });
+
     try {
-        const chainId = parseInt(quoteRequest.fromChain) || currentNetwork;
+        // Use fromChainId (numeric) if available, fallback to parsing fromChain or currentNetwork
+        const chainId = quoteRequest.fromChainId || parseInt(quoteRequest.fromChain) || currentNetwork;
         const networkInfo = NETWORKS[chainId];
-        const nativeSymbol = networkInfo?.symbol || 'ETH';
-        
-        // Networks supported by Alchemy simulateAssetChanges
-        const ALCHEMY_SUPPORTED = ['1', '137', '42161', '10', '8453'];
-        const useAlchemy = ALCHEMY_SUPPORTED.includes(chainId.toString());
-        
-        // Try Alchemy simulation first for supported networks
-        if (useAlchemy) {
-            console.log(`[SIM] Trying Alchemy simulation for ${networkInfo?.name}...`);
-            
-            const alchemyResult = await chrome.runtime.sendMessage({
-                action: 'alchemySimulation',
-                transaction: {
-                    from: currentAccount.address,
-                    to: txData.to,
-                    data: txData.data,
-                    value: txData.value || '0x0'
-                },
-                network: chainId.toString()
-            });
-            
-            if (alchemyResult?.success && !alchemyResult.fallback) {
-                console.log('[SIM] Alchemy simulation successful!', alchemyResult);
-                
-                // Process Alchemy results
-                const balanceChanges = processAlchemyChanges(alchemyResult.changes, quoteRequest, nativeSymbol);
-                
-                // Get native balance for gas check
-                const nativeBalance = await getNativeBalance(chainId.toString());
-                const nativePrice = await getNativeTokenPrice(chainId.toString());
-                
-                // Calculate gas cost from Alchemy result
-                const gasUsed = alchemyResult.gasUsed || 300000;
-                const gasResult = await getRealtimeGasCost(chainId.toString(), 'swap');
-                const gasPrice = gasResult.success ? gasResult.gasPriceGwei * 1e9 : 30e9;
-                const gasCostNative = (gasUsed * gasPrice) / 1e18;
-                const gasCostUsd = gasCostNative * nativePrice;
-                
-                // Add gas to balance changes if not already included
-                const hasGasChange = balanceChanges.some(c => c.changeType === 'GAS');
-                if (!hasGasChange && gasCostNative > 0.00001) {
-                    balanceChanges.push({
-                        type: 'OUT',
-                        symbol: nativeSymbol,
-                        amount: gasCostNative.toFixed(6),
-                        usdValue: gasCostUsd.toFixed(2),
-                        changeType: 'GAS'
-                    });
-                }
-                
-                // Check if will revert
-                if (alchemyResult.willRevert) {
-                    return {
-                        confidence: 99,
-                        balanceChanges: [],
-                        willRevert: true,
-                        revertReason: alchemyResult.revertReason || 'Transaction will fail',
-                        gasEstimate: gasUsed,
-                        gasCostNative: gasCostNative.toFixed(6),
-                        gasCostUsd: gasCostUsd.toFixed(2),
-                        nativeSymbol,
-                        hasEnoughGas: false,
-                        source: 'alchemy'
-                    };
-                }
-                
-                const valueInNative = txData.value ? Number(BigInt(txData.value)) / 1e18 : 0;
-                const totalNeeded = gasCostNative + valueInNative;
-                const hasEnoughGas = nativeBalance >= totalNeeded;
-                
-                return {
-                    confidence: 95, // Alchemy simulation is highly accurate
-                    balanceChanges,
-                    gasEstimate: gasUsed,
-                    gasCostNative: gasCostNative.toFixed(6),
-                    gasCostUsd: gasCostUsd.toFixed(2),
-                    nativeSymbol,
-                    hasEnoughGas,
-                    nativeBalance: nativeBalance.toFixed(6),
-                    totalNeeded: totalNeeded.toFixed(6),
-                    source: 'alchemy'
-                };
-            } else {
-                console.log('[SIM] Alchemy unavailable, falling back to quote-based simulation');
-            }
-        }
-        
-        // Fallback: Quote-based simulation (for BSC, Avalanche, or when Alchemy fails)
-        return await buildQuoteBasedPreview(txData, quoteRequest, quote, chainId, nativeSymbol);
-        
+        const nativeMeta = NetworkManager.NETWORK_METADATA?.[chainId] || {};
+        const nativeSymbol = networkInfo?.symbol || nativeMeta.symbol || 'ETH';
+
+        console.log('[PREVIEW] Using chainId:', chainId, 'symbol:', nativeSymbol);
+
+        // Use aggregator quote data directly
+        return await buildAggregatorPreview(txData, quoteRequest, quote, chainId, nativeSymbol);
+
     } catch (error) {
-        console.error('[SIM] Error building preview:', error);
+        console.error('[PREVIEW] Error building preview:', error);
         return null;
     }
 }
 
 /**
- * Process Alchemy asset changes into our format
+ * Build preview using aggregator quote data directly
+ * Gas comes from aggregator (0x, LI.FI, etc.) - works for ALL networks
  */
-function processAlchemyChanges(changes, quoteRequest, nativeSymbol) {
-    const balanceChanges = [];
-    const userAddress = currentAccount.address.toLowerCase();
-    
-    for (const change of changes) {
-        const isOutgoing = change.from?.toLowerCase() === userAddress;
-        const isIncoming = change.to?.toLowerCase() === userAddress;
-        
-        if (!isOutgoing && !isIncoming) continue;
-        
-        const amount = parseFloat(change.amount) || 0;
-        if (amount === 0) continue;
-        
-        // Determine symbol
-        let symbol = change.symbol || 'Unknown';
-        if (change.assetType === 'NATIVE') {
-            symbol = nativeSymbol;
-        }
-        
-        // Get USD value (try from change, then from our price cache)
-        let usdValue = 0;
-        if (change.logo) {
-            // Alchemy sometimes provides price data
-            usdValue = amount * (getTokenPrice(symbol) || 0);
-        } else {
-            usdValue = amount * (getTokenPrice(symbol) || 0);
-        }
-        
-        balanceChanges.push({
-            type: isOutgoing ? 'OUT' : 'IN',
-            symbol: symbol,
-            amount: amount.toFixed(6),
-            usdValue: usdValue.toFixed(2),
-            changeType: change.changeType || 'TRANSFER',
-            assetType: change.assetType,
-            contractAddress: change.contractAddress,
-            logo: change.logo
-        });
-    }
-    
-    // If no changes detected from Alchemy, use quote data as fallback
-    if (balanceChanges.length === 0) {
-        console.log('[SIM] No changes from Alchemy, using quote data');
-        
-        // From quote request
-        const fromSymbol = quoteRequest.fromTokenSymbol || 'TOKEN';
-        const fromAmount = parseFloat(quoteRequest.fromAmount) || 0;
-        const fromPrice = getTokenPrice(fromSymbol) || 0;
-        
-        if (fromAmount > 0) {
-            balanceChanges.push({
-                type: 'OUT',
-                symbol: fromSymbol,
-                amount: fromAmount.toFixed(6),
-                usdValue: (fromAmount * fromPrice).toFixed(2),
-                changeType: 'TRANSFER'
-            });
-        }
-        
-        // To quote (estimated)
-        const toSymbol = quoteRequest.toTokenSymbol || 'TOKEN';
-        const toPrice = getTokenPrice(toSymbol) || 0;
-        // Estimate from quote if available
-        const toAmount = fromAmount * (fromPrice / (toPrice || 1)) * 0.995; // 0.5% slippage estimate
-        
-        if (toAmount > 0) {
-            balanceChanges.push({
-                type: 'IN',
-                symbol: toSymbol,
-                amount: toAmount.toFixed(6),
-                usdValue: (toAmount * toPrice).toFixed(2),
-                changeType: 'TRANSFER'
-            });
-        }
-    }
-    
-    return balanceChanges;
-}
+async function buildAggregatorPreview(txData, quoteRequest, quote, chainId, nativeSymbol) {
+    console.log('[GAS] Building gas preview for chain:', chainId);
 
-/**
- * Quote-based preview (fallback for unsupported networks like BSC)
- */
-async function buildQuoteBasedPreview(txData, quoteRequest, quote, chainId, nativeSymbol) {
-    console.log('[SIM] Building quote-based preview (fallback)');
-    
-    // Get gas estimate via eth_estimateGas
-    let gasEstimate = txData.gasLimit || txData.gas || 300000;
-    let gasPrice = txData.gasPrice || null;
-    
-    // Try to get accurate gas estimate from RPC
+    // Get original quote data (may be nested in _original)
+    const originalData = quote?._original || quote;
+
+    // Gas Limit (estimatedGas) - always from aggregator (backend normalizes it)
+    const gasEstimate = parseInt(
+        quote?.estimatedGas ||
+        originalData?.estimatedGas ||
+        txData.gasLimit ||
+        txData.gas
+    ) || 200000;
+
+    console.log('[GAS] Gas limit from aggregator:', gasEstimate);
+
+    // Gas Price - always from RPC /api/v1/gas/prices
+    let gasCostNative = 0;
+    let gasCostUsd = 0;
+    const nativePrice = await getNativeTokenPrice(chainId.toString());
+    console.log('[GAS] Native price for chain', chainId, ':', nativePrice);
+
     try {
-        const estimateResponse = await chrome.runtime.sendMessage({
-            action: 'estimateGas',
-            transaction: {
-                from: currentAccount.address,
-                to: txData.to,
-                data: txData.data,
-                value: txData.value || '0x0'
-            },
-            network: chainId.toString()
-        });
-        
-        if (estimateResponse?.success && estimateResponse.gasLimit) {
-            gasEstimate = estimateResponse.gasLimit;
-            console.log('[SIM] Got accurate gas estimate:', gasEstimate);
+        console.log('[GAS] Calling getRealtimeGasCost for chainId:', chainId.toString());
+        const gasResult = await getRealtimeGasCost(chainId.toString(), 'swap');
+        console.log('[GAS] RPC result:', gasResult);
+
+        if (gasResult.success && gasResult.gasPriceGwei > 0) {
+            const gasPriceWei = gasResult.gasPriceGwei * 1e9; // Gwei to wei
+            const gasCostWei = BigInt(gasEstimate) * BigInt(Math.floor(gasPriceWei));
+            gasCostNative = Number(gasCostWei) / 1e18;
+            gasCostUsd = gasCostNative * nativePrice;
+            console.log('[GAS] ✅ Calculated:', {
+                gasLimit: gasEstimate,
+                gasPriceGwei: gasResult.gasPriceGwei.toFixed(4),
+                gasCostNative: gasCostNative.toFixed(8),
+                gasCostUsd: gasCostUsd.toFixed(2)
+            });
+        } else {
+            console.warn('[GAS] ❌ Failed to get gas price from RPC:', gasResult);
         }
     } catch (e) {
-        console.warn('[SIM] eth_estimateGas failed, using quote gas:', e.message);
+        console.error('[GAS] ❌ Error fetching gas price:', e.message, e);
     }
-    
-    // Get current gas price if not provided
-    if (!gasPrice) {
-        const gasResult = await getRealtimeGasCost(chainId.toString(), 'swap');
-        if (gasResult.success) {
-            gasPrice = gasResult.gasPriceGwei * 1e9; // Convert to wei
-        } else {
-            gasPrice = 30000000000; // 30 gwei fallback
-        }
-    }
-    
-    // Calculate gas cost
-    const gasCostWei = BigInt(gasEstimate) * BigInt(Math.floor(gasPrice));
-    const gasCostNative = Number(gasCostWei) / 1e18;
-    const nativePrice = await getNativeTokenPrice(chainId.toString());
-    const gasCostUsd = gasCostNative * nativePrice;
-    
+
     // Build balance changes from quote
     const balanceChanges = [];
-    
+
     // Outgoing (what user pays)
     const fromSymbol = quoteRequest.fromTokenSymbol || quote?.action?.fromToken?.symbol || 'TOKEN';
     const fromAmount = parseFloat(quoteRequest.fromAmount) || 0;
     const fromPrice = getTokenPrice(fromSymbol) || quote?.action?.fromToken?.priceUSD || 0;
-    
+
     balanceChanges.push({
         type: 'OUT',
         symbol: fromSymbol,
@@ -1746,24 +2018,28 @@ async function buildQuoteBasedPreview(txData, quoteRequest, quote, chainId, nati
         usdValue: (fromAmount * fromPrice).toFixed(2),
         changeType: 'TRANSFER'
     });
-    
-    // Gas cost (native token)
-    if (gasCostNative > 0.00001) {
+
+    // Gas cost (native token) - use USD threshold ($0.001) instead of native amount
+    // BSC/Polygon have very cheap gas, native threshold would filter valid costs
+    if (gasCostUsd > 0.001 || gasCostNative > 0.0000001) {
+        console.log('[GAS] ✅ Adding GAS entry:', gasCostNative.toFixed(8), nativeSymbol, '$' + gasCostUsd.toFixed(4));
         balanceChanges.push({
             type: 'OUT',
             symbol: nativeSymbol,
-            amount: gasCostNative.toFixed(6),
+            amount: gasCostNative.toFixed(8),
             usdValue: gasCostUsd.toFixed(2),
             changeType: 'GAS'
         });
+    } else {
+        console.warn('[GAS] ⚠️ gasCostNative too small, not adding GAS entry:', gasCostNative, '$' + gasCostUsd.toFixed(6));
     }
-    
+
     // Incoming (what user receives)
     const toSymbol = quoteRequest.toTokenSymbol || quote?.action?.toToken?.symbol || 'TOKEN';
     const toAmount = parseFloat(quote?.estimate?.toAmount) / (10 ** (quote?.action?.toToken?.decimals || 18)) ||
                     parseFloat(quote?.buyAmount) / (10 ** (quote?.action?.toToken?.decimals || 18)) || 0;
     const toPrice = getTokenPrice(toSymbol) || quote?.action?.toToken?.priceUSD || 0;
-    
+
     balanceChanges.push({
         type: 'IN',
         symbol: toSymbol,
@@ -1771,15 +2047,15 @@ async function buildQuoteBasedPreview(txData, quoteRequest, quote, chainId, nati
         usdValue: (toAmount * toPrice).toFixed(2),
         changeType: 'TRANSFER'
     });
-    
+
     // Check if user has enough for gas
     const nativeBalance = await getNativeBalance(chainId.toString());
     const valueInNative = txData.value ? Number(BigInt(txData.value)) / 1e18 : 0;
     const totalNeeded = gasCostNative + valueInNative;
     const hasEnoughGas = nativeBalance >= totalNeeded;
-    
+
     return {
-        confidence: 85, // Quote-based simulation
+        confidence: 90, // Aggregator data is reliable
         balanceChanges,
         gasEstimate: gasEstimate,
         gasCostNative: gasCostNative.toFixed(6),
@@ -1788,7 +2064,7 @@ async function buildQuoteBasedPreview(txData, quoteRequest, quote, chainId, nati
         hasEnoughGas,
         nativeBalance: nativeBalance.toFixed(6),
         totalNeeded: totalNeeded.toFixed(6),
-        source: 'quote-based'
+        source: 'aggregator'
     };
 }
 
@@ -2098,6 +2374,11 @@ function parseTransactionError(errorMessage, type = 'swap') {
     if (msg.includes('liquidity') || msg.includes('no route')) {
         return `Insufficient liquidity for this ${type}. Try a smaller amount.`;
     }
+
+    // No aggregator available for this route
+    if (msg.includes('no_aggregator') || msg.includes('no compatible aggregator') || msg.includes('compatibleaggregators')) {
+        return `This route is not supported yet. Try a different destination network.`;
+    }
     
     // Default - show truncated original message
     if (errorMessage.length > 100) {
@@ -2134,15 +2415,17 @@ async function executeSwapAfterApproval() {
         return;
     }
     
-    const { txData, quoteRequest, aggregator, fromToken, toToken, fromAmount, toAmount, fromNetwork, fromTokenAddress, toTokenAddress } = savedState;
-    
+    const { txData, quoteRequest, selectedQuote, aggregator, fromToken, toToken, fromAmount, toAmount, fromNetwork, fromTokenAddress, toTokenAddress } = savedState;
+
     console.log('[SYNC] [Variant A] Executing swap with saved data:', {
         aggregator,
         fromToken,
         toToken,
         fromAmount,
         txTo: txData.to,
-        dataLength: txData.data?.length
+        dataLength: txData.data?.length,
+        hasSelectedQuote: !!selectedQuote,
+        requestId: selectedQuote?.requestId
     });
     
     try {
@@ -2214,8 +2497,9 @@ async function executeSwapAfterApproval() {
             
         } else {
             // For other aggregators: call /execute as before
+            // Pass selectedQuote for route consistency (critical for Rango)
             console.log('[SYNC] [Variant A] Getting fresh transaction data...');
-            freshExecuteResponse = await FortixAPI.executeSwap(aggregator, quoteRequest);
+            freshExecuteResponse = await FortixAPI.executeSwap(aggregator, quoteRequest, selectedQuote);
             
             if (!freshExecuteResponse.success) {
                 throw new Error('Failed to get fresh quote: ' + (freshExecuteResponse.error || 'Unknown error'));
@@ -2381,6 +2665,10 @@ function clearSwapReadyState() {
 
 // Execute swap
 async function executeSwap() {
+    // Stop quote auto-refresh when executing
+    stopQuoteRefresh();
+    clearMaxModeState();
+
     // Check if this is bridge mode
     if (currentSwapMode === 'bridge') {
         await executeBridgeFromUnified();
@@ -2444,7 +2732,28 @@ async function executeSwap() {
             throw new Error('Missing quote data. Please get a new quote.');
         }
 
-        console.log('[SWAP] Getting transaction data for aggregator:', aggregator);
+        // Get selectedQuote for route consistency (prevents different route on execute)
+        const selectedQuote = currentSwapQuote._selectedQuote;
+        const quoteTimestamp = currentSwapQuote._selectedQuoteTimestamp;
+
+        // Validate quote TTL (default 30 seconds)
+        const quoteTTL = selectedQuote?.ttl || 30;
+        const quoteAge = quoteTimestamp ? (Date.now() - quoteTimestamp) / 1000 : Infinity;
+
+        if (quoteAge > quoteTTL) {
+            console.warn('[SWAP] Quote expired:', { quoteAge, quoteTTL });
+            showToast('Quote expired. Please refresh and try again.', 'warning');
+            hideLoader();
+            document.getElementById('swapConfirmBtn').disabled = false;
+            document.getElementById('swapConfirmBtn').textContent = 'Swap';
+            return;
+        }
+
+        console.log('[SWAP] Getting transaction data for aggregator:', aggregator, {
+            hasSelectedQuote: !!selectedQuote,
+            requestId: selectedQuote?.requestId,
+            quoteAge: quoteAge.toFixed(1) + 's'
+        });
 
         // ============ CRITICAL: FOR 0x WITH PERMIT2, GET FRESH QUOTE ============
         // Permit2 quotes have a nonce and deadline that can expire quickly
@@ -2528,7 +2837,8 @@ async function executeSwap() {
             
         } else {
             // For other aggregators: call /execute as before
-            executeResponse = await FortixAPI.executeSwap(aggregator, quoteRequest);
+            // Pass selectedQuote for route consistency (critical for Rango)
+            executeResponse = await FortixAPI.executeSwap(aggregator, quoteRequest, selectedQuote);
         }
         // ============ END CRITICAL FIX ============
 
@@ -2655,13 +2965,12 @@ async function executeSwap() {
             document.getElementById('swapConfirmBtn').textContent = 'Checking approval...';
             
             try {
-                const rpcUrl = getRpcUrlForChain(quoteRequest.fromChain);
                 const allowanceCheck = await checkTokenAllowance(
                     quoteRequest.fromToken,
                     currentAccount.address,
                     spenderAddress, // Use CORRECT spender from OKX API!
                     quoteRequest.amount,
-                    rpcUrl
+                    quoteRequest.fromChain // Pass chain name, backend handles RPC
                 );
                 
                 console.log('[SWAP] Allowance check result:', allowanceCheck);
@@ -2756,6 +3065,7 @@ async function executeSwap() {
                     window._swapReadyAfterApproval = {
                         txData: txData,
                         quoteRequest: quoteRequest,
+                        selectedQuote: currentSwapQuote._selectedQuote,  // For route consistency
                         aggregator: aggregator,
                         fromToken: fromToken,
                         toToken: toToken,
@@ -2774,10 +3084,13 @@ async function executeSwap() {
                     swapBtn.textContent = '[OK] Approved! Swap now';
                     swapBtn.disabled = false;
                     swapBtn.classList.add('swap-ready-after-approval');
-                    
+
                     // Add visual indicator
                     swapBtn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
-                    
+
+                    // Restart quote refresh after approval
+                    startQuoteRefresh();
+
                     // Return without executing swap - user must click again
                     return;
                     // ============ END VARIANT A ============

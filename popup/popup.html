@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forge Wallet</title>
+    <title>FortiX Wallet</title>
     <link rel="stylesheet" href="../styles/main.css">
     <script src="theme-loader.js"></script>
 </head>
@@ -12,10 +12,10 @@
     <div id="loaderContainer" class="loader-container">
         <div class="loader-content">
             <div class="loader-logo">
-                <img src="../assets/forge-logo.svg" alt="Forge" style="width: 64px; height: 64px;">
+                <img src="../assets/forge-logo.svg" alt="FortiX" style="width: 64px; height: 64px;">
             </div>
             <div class="loader-spinner"></div>
-            <div class="loader-text" data-i18n="loading">Loading Forge Wallet...</div>
+            <div class="loader-text" data-i18n="loading">Loading FortiX Wallet...</div>
             <div class="loader-version">v0.0.12</div>
             <div class="loader-progress">
                 <div class="loader-progress-bar"></div>
@@ -28,14 +28,14 @@
         <div class="wallet-header">
             <div class="wallet-logo">
                 <div class="logo-icon">
-                    <img src="../assets/forge-logo.svg" alt="Forge" style="width: 48px; height: 48px;">
+                    <img src="../assets/forge-logo.svg" alt="FortiX" style="width: 48px; height: 48px;">
                 </div>
-                <div class="logo-text">Forge Wallet</div>
+                <div class="logo-text">FortiX Wallet</div>
             </div>
         </div>
 
         <div style="padding: 40px 20px; text-align: center;">
-            <h2 style="color: var(--text-primary); font-size: 20px; margin-bottom: 12px;" data-i18n="welcomeTitle">Welcome to Forge Wallet</h2>
+            <h2 style="color: var(--text-primary); font-size: 20px; margin-bottom: 12px;" data-i18n="welcomeTitle">Welcome to FortiX Wallet</h2>
             <p style="color: var(--text-muted); margin-bottom: 32px; line-height: 1.5;" data-i18n="welcomeSubtitle">
                 Secure Ethereum wallet with multi-chain bridge support
             </p>
@@ -56,9 +56,9 @@
         <div class="wallet-header">
             <div class="wallet-logo">
                 <div class="logo-icon">
-                    <img src="../assets/forge-logo.svg" alt="Forge" style="width: 48px; height: 48px;">
+                    <img src="../assets/forge-logo.svg" alt="FortiX" style="width: 48px; height: 48px;">
                 </div>
-                <div class="logo-text">Forge Wallet</div>
+                <div class="logo-text">FortiX Wallet</div>
             </div>
         </div>
 
@@ -103,9 +103,9 @@
         <div class="wallet-header">
             <div class="wallet-logo">
                 <div class="logo-icon">
-                    <img src="../assets/forge-logo.svg" alt="Forge" style="width: 48px; height: 48px;">
+                    <img src="../assets/forge-logo.svg" alt="FortiX" style="width: 48px; height: 48px;">
                 </div>
-                <div class="logo-text">Forge Wallet</div>
+                <div class="logo-text">FortiX Wallet</div>
             </div>
         </div>
 
@@ -777,13 +777,7 @@
                 <div class="form-group">
                     <label data-i18n="fromNetwork">From Network</label>
                     <select id="bridgeFromNetwork" class="form-control">
-                        <option value="1">Ethereum</option>
-                        <option value="56">BNB Chain</option>
-                        <option value="137">Polygon</option>
-                        <option value="42161">Arbitrum</option>
-                        <option value="10">Optimism</option>
-                        <option value="8453">Base</option>
-                        <option value="43114">Avalanche</option>
+                        <!-- Populated dynamically by populateBridgeNetworks() -->
                     </select>
                 </div>
                 <div style="text-align: center; margin: 12px 0;">
@@ -796,13 +790,7 @@
                 <div class="form-group">
                     <label>To Network</label>
                     <select id="bridgeToNetwork" class="form-control">
-                        <option value="8453">Base</option>
-                        <option value="42161">Arbitrum</option>
-                        <option value="10">Optimism</option>
-                        <option value="137">Polygon</option>
-                        <option value="56">BNB Chain</option>
-                        <option value="43114">Avalanche</option>
-                        <option value="1">Ethereum</option>
+                        <!-- Populated dynamically by populateBridgeNetworks() -->
                     </select>
                 </div>
                 <div class="form-group">
@@ -1037,7 +1025,10 @@
                     </div>
                     <img id="approvalNetworkBadge" class="approval-network-badge" src="" alt="">
                 </div>
-                <div class="approval-token-name" id="approvalTokenSymbol">TOKEN</div>
+                <div class="approval-token-name">
+                    <span id="approvalTokenSymbol">TOKEN</span>
+                    <span id="approvalTokenTrustBadge" class="token-badge-container"></span>
+                </div>
                 <div class="approval-token-network">
                     <span class="approval-token-network-dot"></span>
                     <span id="approvalNetworkName">Ethereum Network</span>
@@ -1197,8 +1188,17 @@
                 <input type="text" id="networkSearchInput" class="network-search-input" placeholder="Search networks...">
                 <button class="network-search-clear" id="networkSearchClear">×</button>
             </div>
-            <div class="network-list" id="networkList">
+            <div class="network-list" id="networkList" style="padding-bottom: 70px;">
                 <!-- Networks will be populated here -->
+            </div>
+            <!-- Fixed Add Networks button at bottom -->
+            <div class="network-add-footer" id="networkAddFooter">
+                <button class="network-add-footer-btn" id="networkAddFooterBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    <span>Add Networks</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1217,6 +1217,12 @@
             <div class="manage-networks-info">
                 <span id="manageNetworksCount">7 of 7 networks enabled</span>
                 <div class="manage-networks-actions">
+                    <button id="addNetworkBtn" class="btn-primary-small" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; background: var(--primary-color); color: white; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                        Add
+                    </button>
                     <button id="enableAllNetworks" class="btn-text">Enable All</button>
                     <span style="color: var(--text-muted);">|</span>
                     <button id="disableAllNetworks" class="btn-text">Disable All</button>
@@ -1224,6 +1230,59 @@
             </div>
             <div class="manage-networks-list" id="manageNetworksList">
                 <!-- Networks with toggles will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Network Modal -->
+    <div id="addNetworkModal" class="modal fullscreen-modal">
+        <div class="fullscreen-modal-content">
+            <div class="fullscreen-modal-header">
+                <button class="modal-back-btn" id="addNetworkBack">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <h2>Add Network</h2>
+                <div style="width: 24px;"></div>
+            </div>
+            
+            <!-- Search -->
+            <div class="add-network-search" style="padding: 12px 16px;">
+                <div style="position: relative;">
+                    <svg style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted);" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input type="text" id="addNetworkSearch" placeholder="Search networks..." style="width: 100%; padding: 10px 12px 10px 40px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px;">
+                </div>
+            </div>
+            
+            <!-- Loading state -->
+            <div id="addNetworkLoading" style="display: none; padding: 40px; text-align: center;">
+                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                <span style="color: var(--text-muted);">Loading available networks...</span>
+            </div>
+            
+            <!-- Error state -->
+            <div id="addNetworkError" style="display: none; padding: 40px; text-align: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--error-color)" stroke-width="1.5" style="margin-bottom: 12px;">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+                </svg>
+                <p style="color: var(--text-muted); margin-bottom: 16px;" id="addNetworkErrorText">Failed to load networks</p>
+                <button id="addNetworkRetry" class="btn btn-secondary" style="padding: 8px 24px;">Retry</button>
+            </div>
+            
+            <!-- Networks list -->
+            <div class="add-networks-list" id="addNetworksList" style="overflow-y: auto; max-height: calc(100vh - 180px); padding: 0 16px 16px;">
+                <!-- Available networks will be populated here -->
+            </div>
+            
+            <!-- Empty state -->
+            <div id="addNetworkEmpty" style="display: none; padding: 40px; text-align: center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" style="margin-bottom: 12px;">
+                    <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>
+                </svg>
+                <p style="color: var(--text-muted);">No networks found</p>
             </div>
         </div>
     </div>
@@ -1301,6 +1360,8 @@
                         <label data-i18n="tokenContractAddress">Token Contract Address</label>
                         <input type="text" id="tokenAddress" class="form-control" placeholder="0x...">
                     </div>
+                    <!-- Token metadata preview (auto-filled from API) -->
+                    <div id="tokenMetadataPreview" class="token-metadata-preview" style="display: none;"></div>
                     <div class="form-group">
                         <label data-i18n="tokenSymbol">Token Symbol</label>
                         <input type="text" id="tokenSymbol" class="form-control" placeholder="e.g., USDT" maxlength="10">
@@ -1334,7 +1395,10 @@
             <!-- Token Header -->
             <div style="text-align: center; margin-bottom: 20px;">
                 <img id="tokenDetailsIcon" src="../assets/token-icons/eth.svg" style="width: 56px; height: 56px; border-radius: 50%; margin-bottom: 12px;">
-                <h2 id="tokenDetailsName" style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Ethereum</h2>
+                <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">
+                    <span id="tokenDetailsName">Ethereum</span>
+                    <span id="tokenDetailsTrustBadge" class="token-badge-container"></span>
+                </h2>
                 <div id="tokenDetailsPrice" style="font-size: 28px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">$0.00</div>
                 <div id="tokenDetailsPriceChange" style="font-size: 14px; color: var(--success);">+0.00% (24h)</div>
             </div>
@@ -1585,7 +1649,7 @@
                             <span class="settings-section-arrow">▶</span>
                         </div>
                         <div class="settings-section-content" id="sectionHelp" style="display: none;">
-                            <div id="openAISupportBtn" class="settings-item" onclick="openAISupport()">
+                            <div id="openAISupportBtn" class="settings-item">
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2">
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -1879,10 +1943,13 @@
     <!-- Modules (order matters for dependencies!) -->
     <script src="modules/utils.js"></script>
     <script src="modules/tokens.js"></script>
+    <script src="modules/token-metadata.js"></script>
     <script src="modules/gas.js"></script>
+    <script src="modules/max-calculator.js"></script>
     <script src="modules/approval.js"></script>
     <script src="modules/session.js"></script>
     <script src="modules/balance-manager.js"></script>
+    <script src="modules/network-manager.js"></script>
     <script src="modules/networks.js"></script>
     <script src="modules/receive.js"></script>
     <script src="modules/token-picker.js"></script>
@@ -1974,7 +2041,7 @@
                         </svg>
                         <h2 style="margin: 0; font-size: 18px; font-weight: 600;">AI Support</h2>
                     </div>
-                    <button class="close" onclick="closeAISupport()">&times;</button>
+                    <button id="aiSupportCloseBtn" class="close">&times;</button>
                 </div>
             </div>
             <div id="aiChatMessages" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;">

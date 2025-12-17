@@ -1,4 +1,4 @@
-// Forge Wallet - Ethereum Provider (window.ethereum)
+// FortiX Wallet - Ethereum Provider (window.ethereum)
 // Version: 0.0.16
 // Fix: Prevent auto-popup - require user gesture for connection
 (function() {
@@ -7,9 +7,9 @@
     // Production mode - disable verbose logging
     const PRODUCTION_MODE = false; // TEMP: Enable logging for debug
     
-    class ForgeWalletProvider {
+    class FortiXWalletProvider {
         constructor() {
-            this.isForgeWallet = true;
+            this.isFortiXWallet = true;
             this.isMetaMask = true; // Compatibility
             this._isConnected = false;
             this._accounts = [];
@@ -26,7 +26,7 @@
                 if (event.source !== window) return;
                 
                 // Handle disconnect
-                if (event.data.type === 'FORGE_WALLET_DISCONNECT') {
+                if (event.data.type === 'FORTIX_WALLET_DISCONNECT') {
                     console.log('🔥 Provider: Disconnecting...');
                     this._isConnected = false;
                     const oldAccounts = this._accounts;
@@ -42,7 +42,7 @@
                     return;
                 }
                 
-                if (!event.data.type || event.data.type !== 'FORGE_WALLET_RESPONSE') return;
+                if (!event.data.type || event.data.type !== 'FORTIX_WALLET_RESPONSE') return;
                 
                 const { id, result, error } = event.data;
                 const pending = this._pendingRequests.get(id);
@@ -288,7 +288,7 @@
                 this._pendingRequests.set(id, { resolve, reject });
                 
                 window.postMessage({
-                    type: 'FORGE_WALLET_REQUEST',
+                    type: 'FORTIX_WALLET_REQUEST',
                     id: id,
                     method: method,
                     params: params
@@ -342,33 +342,33 @@
     }
     
     // Create and inject provider
-    const forgeWallet = new ForgeWalletProvider();
+    const fortiXWallet = new FortiXWalletProvider();
     
-    // Also expose as window.forgeWallet for direct access
-    window.forgeWallet = forgeWallet;
+    // Also expose as window.fortiXWallet for direct access
+    window.fortiXWallet = fortiXWallet;
     
     // Store any existing provider
     const existingEthereum = window.ethereum;
     if (existingEthereum) {
-        forgeWallet._otherProviders = [existingEthereum];
+        fortiXWallet._otherProviders = [existingEthereum];
     }
     
     // Set as window.ethereum with protection against overwrite
     try {
         Object.defineProperty(window, 'ethereum', {
-            get() { return forgeWallet; },
+            get() { return fortiXWallet; },
             set(val) {
-                console.log('🔥 Forge Wallet: Blocked ethereum overwrite from:', val?.constructor?.name || typeof val);
-                if (val && val !== forgeWallet) {
-                    forgeWallet._otherProviders = forgeWallet._otherProviders || [];
-                    forgeWallet._otherProviders.push(val);
+                console.log('🔥 FortiX Wallet: Blocked ethereum overwrite from:', val?.constructor?.name || typeof val);
+                if (val && val !== fortiXWallet) {
+                    fortiXWallet._otherProviders = fortiXWallet._otherProviders || [];
+                    fortiXWallet._otherProviders.push(val);
                 }
             },
             configurable: true
         });
     } catch (e) {
         // Fallback if defineProperty fails
-        window.ethereum = forgeWallet;
+        window.ethereum = fortiXWallet;
     }
     
     // EIP-6963: Multi Injected Provider Discovery
@@ -377,11 +377,11 @@
             detail: Object.freeze({
                 info: {
                     uuid: '350670db-19fa-4704-a166-e52e178b59d2',
-                    name: 'Forge Wallet',
+                    name: 'FortiX Wallet',
                     icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect fill="%23f6851b" width="32" height="32" rx="8"/></svg>',
-                    rdns: 'io.forge-eth.wallet'
+                    rdns: 'com.fortixwallet'
                 },
-                provider: forgeWallet
+                provider: fortiXWallet
             })
         }));
     };
@@ -399,8 +399,8 @@
     setTimeout(announceProvider, 500);
     setTimeout(announceProvider, 1000);
     
-    console.log('🔥 Forge Wallet Provider Ready');
-    console.log('   window.ethereum.isForgeWallet:', window.ethereum?.isForgeWallet);
-    console.log('   window.forgeWallet:', !!window.forgeWallet);
+    console.log('🔥 FortiX Wallet Provider Ready');
+    console.log('   window.ethereum.isFortiXWallet:', window.ethereum?.isFortiXWallet);
+    console.log('   window.fortiXWallet:', !!window.fortiXWallet);
     
 })();

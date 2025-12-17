@@ -1,6 +1,6 @@
 // ============ ERC20 ALLOWANCE HELPERS ============
 // Перевіряє чи токен вже approved перед викликом approval transaction
-// Джерело: /forge-wallet-v0.0.12/js/erc20-allowance.js
+// All RPC calls go through backend proxy (no direct RPC)
 
 /**
  * Перевірити чи токен approved для spender
@@ -8,43 +8,38 @@
  * @param {string} ownerAddress - User's wallet address
  * @param {string} spenderAddress - Router/Contract address (from aggregator)
  * @param {string} amount - Amount to swap (wei format)
- * @param {string} rpcUrl - RPC URL for chain
+ * @param {string} networkOrChainName - Network ID (e.g., '1') or chain name (e.g., 'ethereum')
  * @returns {Promise<{needsApproval: boolean, currentAllowance: string}>}
  */
-async function checkTokenAllowance(tokenAddress, ownerAddress, spenderAddress, amount, rpcUrl) {
+async function checkTokenAllowance(tokenAddress, ownerAddress, spenderAddress, amount, networkOrChainName) {
     try {
-        console.log('[Allowance Check] Starting...', {
+        console.log('[Allowance Check] Starting via backend RPC...', {
             token: tokenAddress,
             owner: ownerAddress?.substring(0, 10) + '...',
             spender: spenderAddress?.substring(0, 10) + '...',
-            amount: amount?.substring(0, 20) + '...'
+            amount: amount?.substring(0, 20) + '...',
+            network: networkOrChainName
         });
+
+        // Convert chain name to network ID if needed
+        const network = chainNameToNetworkId(networkOrChainName);
 
         // Encode allowance(owner, spender) call
         const encodedData = encodeAllowanceCall(ownerAddress, spenderAddress);
 
-        // Call contract via JSON-RPC
-        const response = await fetch(rpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_call',
-                params: [{
-                    to: tokenAddress,
-                    data: encodedData
-                }, 'latest']
-            })
+        // Call contract via backend RPC proxy (NO DIRECT RPC)
+        const response = await chrome.runtime.sendMessage({
+            action: 'ethCall',
+            network: network,
+            to: tokenAddress,
+            data: encodedData
         });
 
-        const data = await response.json();
-
-        if (data.error) {
-            throw new Error(`RPC Error: ${data.error.message}`);
+        if (!response.success) {
+            throw new Error(response.error || 'eth_call failed');
         }
 
-        const allowanceHex = data.result;
+        const allowanceHex = response.result;
         const currentAllowance = hexToBigInt(allowanceHex);
 
         console.log('[Allowance Check] Current allowance:', {
@@ -84,6 +79,48 @@ async function checkTokenAllowance(tokenAddress, ownerAddress, spenderAddress, a
 }
 
 /**
+ * Convert chain name (e.g., 'ethereum') to network ID (e.g., '1')
+ */
+function chainNameToNetworkId(chainNameOrId) {
+    // If already a number string, return as is
+    if (/^\d+$/.test(chainNameOrId)) {
+        return chainNameOrId;
+    }
+
+    // Chain name to ID mapping
+    const CHAIN_NAME_TO_ID = {
+        'ethereum': '1',
+        'bsc': '56',
+        'polygon': '137',
+        'arbitrum': '42161',
+        'optimism': '10',
+        'base': '8453',
+        'avalanche': '43114',
+        'fantom': '250',
+        'gnosis': '100',
+        'zksync': '324',
+        'linea': '59144',
+        'scroll': '534352',
+        'blast': '81457',
+        'mantle': '5000',
+        'celo': '42220',
+        'moonbeam': '1284',
+        'moonriver': '1285',
+        'polygonzkevm': '1101',
+        'opbnb': '204',
+        'sonic': '146',
+        'berachain': '80094',
+        'sei': '1329',
+        'taiko': '167000',
+        'worldchain': '480',
+        'fraxtal': '252',
+        'unichain': '130'
+    };
+
+    return CHAIN_NAME_TO_ID[chainNameOrId?.toLowerCase()] || '1';
+}
+
+/**
  * Encode allowance(address,address) function call
  * Method ID: 0xdd62ed3e (first 4 bytes of keccak256("allowance(address,address)"))
  */
@@ -115,28 +152,6 @@ function compareBigInts(a, b) {
     if (aBigInt < bBigInt) return -1;
     if (aBigInt > bBigInt) return 1;
     return 0;
-}
-
-/**
- * Get RPC URL for chain
- */
-function getRpcUrlForChain(chain) {
-    const RPC_URLS = {
-        'ethereum': 'https://eth.llamarpc.com',
-        'bsc': 'https://bsc-dataseed1.binance.org',
-        'polygon': 'https://polygon-rpc.com',
-        'arbitrum': 'https://arb1.arbitrum.io/rpc',
-        'optimism': 'https://mainnet.optimism.io',
-        'base': 'https://mainnet.base.org',
-        'avalanche': 'https://api.avax.network/ext/bc/C/rpc',
-        'fantom': 'https://rpc.ftm.tools',
-        'gnosis': 'https://rpc.gnosischain.com',
-        'zksync': 'https://mainnet.era.zksync.io',
-        'linea': 'https://rpc.linea.build',
-        'scroll': 'https://rpc.scroll.io',
-        'blast': 'https://rpc.blast.io'
-    };
-    return RPC_URLS[chain] || RPC_URLS['ethereum'];
 }
 
 // ============ HYBRID APPROVAL SYSTEM ============
@@ -408,7 +423,31 @@ function populateApprovalModal(data) {
         const networkBadge = document.getElementById('approvalNetworkBadge');
         
         if (tokenSymbolEl) tokenSymbolEl.textContent = data.tokenSymbol || 'TOKEN';
-        
+
+        // Fetch and display token trust badge
+        const trustBadgeEl = document.getElementById('approvalTokenTrustBadge');
+        if (trustBadgeEl && data.tokenAddress) {
+            trustBadgeEl.innerHTML = ''; // Clear initially
+            // Fetch metadata asynchronously
+            if (typeof fetchTokenMetadata === 'function') {
+                fetchTokenMetadata(currentNetwork, data.tokenAddress)
+                    .then(metadata => {
+                        if (metadata && trustBadgeEl) {
+                            let badgeHTML = '';
+                            if (typeof getTokenBadgeHTML === 'function') {
+                                badgeHTML = getTokenBadgeHTML(metadata);
+                            } else if (metadata.verified || metadata.isWhitelisted || metadata.tier === 1) {
+                                badgeHTML = '<span class="token-badge token-badge-verified" title="Verified Token">✓</span>';
+                            } else if (metadata.isPopular || metadata.tier === 2) {
+                                badgeHTML = '<span class="token-badge token-badge-popular" title="Popular Token">★</span>';
+                            }
+                            trustBadgeEl.innerHTML = badgeHTML;
+                        }
+                    })
+                    .catch(err => console.warn('[Approval] Token metadata fetch failed:', err.message));
+            }
+        }
+
         // Set token icon (try to get from Trust Wallet assets or use fallback)
         if (tokenIconContainer) {
             const tokenIcon = data.tokenAddress 
@@ -416,7 +455,7 @@ function populateApprovalModal(data) {
                 : null;
             
             if (tokenIcon && tokenIcon !== DEFAULT_TOKEN_ICON) {
-                tokenIconContainer.innerHTML = `<img src="${tokenIcon}" alt="${data.tokenSymbol}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" style="width: 64px; height: 64px; border-radius: 50%; border: 3px solid var(--bg-primary); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">`;
+                tokenIconContainer.innerHTML = `<img src="${tokenIcon}" alt="${data.tokenSymbol}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}">`;
             } else {
                 // Fallback to symbol letters
                 const symbol = (data.tokenSymbol || '??').substring(0, 2).toUpperCase();
@@ -656,8 +695,8 @@ async function updateApprovalGasEstimate(speed) {
             const gasCostGwei = adjustedGasPrice * approvalGas;
             const gasCostETH = gasCostGwei / 1e9;
             
-            // Get ETH price
-            const ethPrice = await getEthPrice();
+            // Get ETH price (fetchEthPrice from dapp-connection.js)
+            const ethPrice = await fetchEthPrice();
             const gasCostUSD = gasCostETH * ethPrice;
             
             gasEstimateEl.textContent = `Estimated fee: ~$${gasCostUSD.toFixed(2)} (${adjustedGasPrice.toFixed(1)} gwei)`;

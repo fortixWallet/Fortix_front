@@ -145,10 +145,12 @@ function openTokenPickerModal(type) {
         popularContainer.innerHTML = filteredPopular.map(symbol => {
             const icon = getSwapTokenIcon(symbol, chainId);
             const isSelected = symbol === currentSelected;
+            // Popular tokens get verified badge
+            const badgeHTML = '<span class="token-badge token-badge-verified" title="Verified" style="margin-left: 2px;">✓</span>';
             return `
                 <div class="token-picker-popular-item${isSelected ? ' selected' : ''}" data-symbol="${symbol}">
                     <img src="${icon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${symbol}">
-                    <span>${symbol}</span>
+                    <span>${symbol}${badgeHTML}</span>
                 </div>
             `;
         }).join('');
@@ -196,15 +198,25 @@ function openTokenPickerModal(type) {
             const balance = getBalanceForToken(symbol);
             const balanceStr = balance > 0 ? formatTokenBalance(balance, symbol) : '';
             const balanceUsd = balance > 0 ? formatCurrency(balance * (getTokenPriceForSymbol(symbol) || 0)) : '';
-            
+
+            // Get token address for metadata lookup
+            const tokenAddress = tokens[symbol];
+            const isPopularToken = popularList.includes(symbol);
+
+            // Generate badge based on token type
+            let badgeHTML = '';
+            if (isPopularToken) {
+                badgeHTML = '<span class="token-badge token-badge-verified" title="Verified">✓</span>';
+            }
+
             return `
-                <div class="token-picker-token-item${isSelected ? ' selected' : ''}" data-symbol="${symbol}">
+                <div class="token-picker-token-item${isSelected ? ' selected' : ''}" data-symbol="${symbol}" data-address="${tokenAddress || ''}">
                     <div class="token-picker-token-item-icon">
                         <img src="${icon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${symbol}">
                         <img class="network-badge" src="${networkIcon}" alt="">
                     </div>
                     <div class="token-picker-token-item-info">
-                        <div class="token-picker-token-item-symbol">${symbol}</div>
+                        <div class="token-picker-token-item-symbol">${symbol}${badgeHTML}</div>
                         <div class="token-picker-token-item-name">${name}</div>
                     </div>
                     ${balance > 0 ? `
@@ -344,144 +356,20 @@ function hasAnyBalanceOnCurrentNetwork() {
 let multiNetworkBalances = {};  // DEPRECATED: Use BalanceManager.data.nativeBalances
 let multiNetworkBalancesUSD = {}; // DEPRECATED: Use BalanceManager.getNativeBalanceUSD()
 
-// Multi-source price fetching (Binance → CoinGecko → Static fallback)
-
-// Binance symbols mapping
-const NATIVE_TOKEN_BINANCE = {
-    '1': 'ETHUSDT',
-    '8453': 'ETHUSDT',     // Base uses ETH
-    '42161': 'ETHUSDT',    // Arbitrum uses ETH
-    '10': 'ETHUSDT',       // Optimism uses ETH
-    '137': 'POLUSDT',      // Polygon (POL token after rebrand from MATIC in Sept 2024)
-    '56': 'BNBUSDT',       // BSC
-    '43114': 'AVAXUSDT',   // Avalanche
-    '250': 'FTMUSDT'       // Fantom
-};
-
-// CoinGecko IDs mapping (fallback)
-const NATIVE_TOKEN_COINGECKO = {
-    '1': 'ethereum',
-    '8453': 'ethereum',
-    '42161': 'ethereum',
-    '10': 'ethereum',
-    '137': 'polygon-ecosystem-token',  // POL token (rebranded from MATIC Sept 2024)
-    '56': 'binancecoin',
-    '43114': 'avalanche-2',
-    '250': 'fantom'
-};
-
-// Static fallback prices for native tokens (last resort)
-const NATIVE_TOKEN_FALLBACK_PRICES = {
-    '1': 3150,      // ETH
-    '8453': 3150,   // Base (ETH)
-    '42161': 3150,  // Arbitrum (ETH)
-    '10': 3150,     // Optimism (ETH)
-    '137': 0.1245,  // POL (Polygon - rebranded from MATIC)
-    '56': 910,      // BNB (BSC)
-    '43114': 13.8,  // AVAX (Avalanche)
-    '250': 0.70     // FTM (Fantom)
-};
-
-// Price cache to avoid rate limits
+// Price cache (now delegates to BalanceManager)
 let priceCache = null;
-let priceCacheTimestamp = 0;
-const PRICE_CACHE_TTL = 120000; // 2 minutes
 
-// Fetch native token prices for all networks (multi-source with fallback)
+// Fetch native token prices for all networks (delegates to BalanceManager)
 async function fetchNativeTokenPrices() {
-    console.log('[SYNC] fetchNativeTokenPrices() called');
-    const prices = {};
+    console.log('[SYNC] fetchNativeTokenPrices() - delegating to BalanceManager');
 
-    // Check cache first
-    const now = Date.now();
-    if (priceCache && (now - priceCacheTimestamp) < PRICE_CACHE_TTL) {
-        console.log('[OK] Using cached prices:', priceCache);
-        return priceCache;
-    }
+    // Use BalanceManager as single source of truth
+    const prices = await BalanceManager.fetchNativePrices();
 
-    console.log('[WAIT] Fetching new prices from APIs...');
+    // Update local cache for backwards compatibility
+    priceCache = prices;
 
-    // Try Source 1: Binance API (fastest, most reliable)
-    try {
-        const symbols = [...new Set(Object.values(NATIVE_TOKEN_BINANCE))];
-        const symbolsParam = JSON.stringify(symbols);
-
-        const response = await fetch(
-            `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolsParam)}`,
-            { signal: AbortSignal.timeout(5000) }
-        );
-
-        if (response.ok) {
-            const data = await response.json();
-
-            // Convert array to object
-            const priceMap = {};
-            data.forEach(item => {
-                priceMap[item.symbol] = parseFloat(item.price);
-            });
-
-            // Map prices back to network IDs
-            for (const [networkId, symbol] of Object.entries(NATIVE_TOKEN_BINANCE)) {
-                prices[networkId] = priceMap[symbol] || 0;
-            }
-
-            // Cache successful fetch
-            priceCache = prices;
-            priceCacheTimestamp = now;
-            console.log('[OK] Binance prices fetched:', prices);
-            return prices;
-        }
-
-        throw new Error(`Binance API: ${response.status}`);
-    } catch (binanceError) {
-        console.warn('[WARN] Binance API failed, trying CoinGecko...', binanceError.message);
-
-        // Try Source 2: CoinGecko API (fallback)
-        try {
-            const ids = [...new Set(Object.values(NATIVE_TOKEN_COINGECKO))].join(',');
-
-            const response = await fetch(
-                `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
-                { signal: AbortSignal.timeout(5000) }
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-
-                // Map prices back to network IDs
-                for (const [networkId, coinId] of Object.entries(NATIVE_TOKEN_COINGECKO)) {
-                    prices[networkId] = data[coinId]?.usd || 0;
-                }
-
-                // Cache successful fetch
-                priceCache = prices;
-                priceCacheTimestamp = now;
-                console.log('[OK] CoinGecko prices fetched:', prices);
-                return prices;
-            }
-
-            throw new Error(`CoinGecko API: ${response.status}`);
-        } catch (coingeckoError) {
-            console.warn('[WARN] CoinGecko API also failed, using static fallback prices', coingeckoError.message);
-
-            // Source 3: Static fallback prices (last resort)
-            Object.assign(prices, NATIVE_TOKEN_FALLBACK_PRICES);
-
-            // Use ethPrice if available (more accurate for ETH-based chains)
-            if (ethPrice) {
-                prices['1'] = ethPrice;
-                prices['8453'] = ethPrice;
-                prices['42161'] = ethPrice;
-                prices['10'] = ethPrice;
-            }
-
-            // Cache fallback prices (shorter TTL - retry sooner)
-            priceCache = prices;
-            priceCacheTimestamp = now - 60000; // Expire in 1 minute instead of 2
-            console.log('[OK] Using static fallback prices:', prices);
-            return prices;
-        }
-    }
+    return prices;
 }
 
 // Get USD balance for a network (from cache)

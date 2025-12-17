@@ -1,4 +1,4 @@
-// Forge Wallet - Popup Script
+// FortiX Wallet - Popup Script
 
 // Production mode - disable verbose logging
 const PRODUCTION_MODE = false;  // DEBUG: set to false to see errors
@@ -17,16 +17,7 @@ if (PRODUCTION_MODE) {
 let currentAccount = null;
 let accounts = [];
 let currentNetwork = '11155111'; // Default to Sepolia, will be loaded from storage
-// All 37 mainnet networks enabled by default
-let enabledNetworks = [
-    '1', '10', '56', '137', '42161', '8453', '43114', // Tier 1
-    '324', '534352', '59144', '1101', // ZK
-    '81457', '5000', '42170', '167000', // L2
-    '250', '100', '42220', '1329', '50', // Alt L1
-    '1284', '1285', '7777777', '33139', '747474', // Gaming
-    '204', // opBNB
-    '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988' // Emerging
-];
+// enabledNetworks is now defined after NETWORKS initialization above
 let ethPrice = 0;
 let nativeTokenPrice = 0; // Price for current network's native token
 let selectedAsset = null; // Selected token/coin for sending
@@ -75,68 +66,104 @@ async function checkForPendingTransactions() {
 let tokenDataCache = {
     balances: {},
     prices: {},
-    pricesTimestamp: 0
+    pricesTimestamp: 0,
+    // GoPlus security cache (5 min TTL)
+    securityCache: {},
+    securityTimestamp: 0
 };
 
 // Network Configurations
 // ═══════════════════════════════════════════════════════════════════════════════
-// NETWORKS CONFIGURATION (37 mainnet chains)
-// Version: 2.0.0 | Last updated: 2025-12-13
+// NETWORKS CONFIGURATION - Dynamic via NetworkManager
+// Version: 3.0.0 | Last updated: 2025-12-15
+// 7 hardcoded + dynamic user networks via API
 // ═══════════════════════════════════════════════════════════════════════════════
-const NETWORKS = {
-    // TIER 1: Ethereum & Major L2s
-    '1': { name: 'Ethereum', rpc: 'https://eth.llamarpc.com', explorer: 'https://etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'ethereum', chainId: 1, color: '#627EEA' },
-    '8453': { name: 'Base', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', chain: 'base', chainId: 8453, color: '#0052FF' },
-    '42161': { name: 'Arbitrum One', rpc: 'https://arbitrum.llamarpc.com', explorer: 'https://arbiscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', chain: 'arbitrum', chainId: 42161, color: '#28A0F0' },
-    '10': { name: 'Optimism', rpc: 'https://optimism.llamarpc.com', explorer: 'https://optimistic.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', chain: 'optimism', chainId: 10, color: '#FF0420' },
-    '137': { name: 'Polygon', rpc: 'https://polygon.llamarpc.com', explorer: 'https://polygonscan.com', symbol: 'POL', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', chain: 'polygon', chainId: 137, color: '#8247E5' },
-    '56': { name: 'BNB Chain', rpc: 'https://bsc-dataseed1.binance.org', explorer: 'https://bscscan.com', symbol: 'BNB', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png', chain: 'smartchain', chainId: 56, color: '#F0B90B' },
-    '43114': { name: 'Avalanche', rpc: 'https://avalanche-c-chain.publicnode.com', explorer: 'https://snowtrace.io', symbol: 'AVAX', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png', chain: 'avalanchec', chainId: 43114, color: '#E84142' },
-    // ZK Rollups
-    '324': { name: 'zkSync Era', rpc: 'https://mainnet.era.zksync.io', explorer: 'https://explorer.zksync.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/zksync/info/logo.png', chain: 'zksync', chainId: 324, color: '#8C8DFC' },
-    '534352': { name: 'Scroll', rpc: 'https://rpc.scroll.io', explorer: 'https://scrollscan.com', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/scroll/info/logo.png', chain: 'scroll', chainId: 534352, color: '#FFEEDA' },
-    '59144': { name: 'Linea', rpc: 'https://rpc.linea.build', explorer: 'https://lineascan.build', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/linea/info/logo.png', chain: 'linea', chainId: 59144, color: '#121212' },
-    '1101': { name: 'Polygon zkEVM', rpc: 'https://zkevm-rpc.com', explorer: 'https://zkevm.polygonscan.com', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygonzkevm/info/logo.png', chain: 'polygonzkevm', chainId: 1101, color: '#8247E5' },
-    // L2 & Rollups
-    '81457': { name: 'Blast', rpc: 'https://rpc.blast.io', explorer: 'https://blastscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/blast/info/logo.png', chain: 'blast', chainId: 81457, color: '#FCFC03' },
-    '5000': { name: 'Mantle', rpc: 'https://rpc.mantle.xyz', explorer: 'https://mantlescan.xyz', symbol: 'MNT', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/mantle/info/logo.png', chain: 'mantle', chainId: 5000, color: '#000000' },
-    '42170': { name: 'Arbitrum Nova', rpc: 'https://nova.arbitrum.io/rpc', explorer: 'https://nova.arbiscan.io', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum-nova.jpg', chain: 'arbitrumnova', chainId: 42170, color: '#E57310' },
-    '167000': { name: 'Taiko', rpc: 'https://rpc.mainnet.taiko.xyz', explorer: 'https://taikoscan.io', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_taiko.jpg', chain: 'taiko', chainId: 167000, color: '#E81899' },
-    // Alt L1s
-    '250': { name: 'Fantom', rpc: 'https://rpc.ftm.tools', explorer: 'https://ftmscan.com', symbol: 'FTM', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png', chain: 'fantom', chainId: 250, color: '#1969FF' },
-    '100': { name: 'Gnosis', rpc: 'https://rpc.gnosischain.com', explorer: 'https://gnosisscan.io', symbol: 'xDAI', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdai/info/logo.png', chain: 'xdai', chainId: 100, color: '#04795B' },
-    '42220': { name: 'Celo', rpc: 'https://forno.celo.org', explorer: 'https://celoscan.io', symbol: 'CELO', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/celo/info/logo.png', chain: 'celo', chainId: 42220, color: '#FCFF52' },
-    '1329': { name: 'Sei', rpc: 'https://evm-rpc.sei-apis.com', explorer: 'https://seitrace.com', symbol: 'SEI', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sei/info/logo.png', chain: 'sei', chainId: 1329, color: '#9B1B1B' },
-    '50': { name: 'XDC Network', rpc: 'https://rpc.xinfin.network', explorer: 'https://xdcscan.io', symbol: 'XDC', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdc/info/logo.png', chain: 'xdc', chainId: 50, color: '#1A3B59' },
-    // Gaming & NFT
-    '1284': { name: 'Moonbeam', rpc: 'https://rpc.api.moonbeam.network', explorer: 'https://moonscan.io', symbol: 'GLMR', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonbeam/info/logo.png', chain: 'moonbeam', chainId: 1284, color: '#53CBC8' },
-    '1285': { name: 'Moonriver', rpc: 'https://rpc.api.moonriver.moonbeam.network', explorer: 'https://moonriver.moonscan.io', symbol: 'MOVR', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/moonriver/info/logo.png', chain: 'moonriver', chainId: 1285, color: '#F2B705' },
-    '7777777': { name: 'Zora', rpc: 'https://rpc.zora.energy', explorer: 'https://explorer.zora.energy', symbol: 'ETH', icon: 'https://icons.llama.fi/zora.jpg', chain: 'zora', chainId: 7777777, color: '#000000' },
-    '33139': { name: 'ApeChain', rpc: 'https://rpc.apechain.com/http', explorer: 'https://apescan.io', symbol: 'APE', icon: 'https://icons.llamao.fi/icons/chains/rsz_apechain.jpg', chain: 'apechain', chainId: 33139, color: '#0054FA' },
-    '747474': { name: 'Katana', rpc: 'https://ronin.lgns.net/rpc', explorer: 'https://app.roninchain.com', symbol: 'RON', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ronin/info/logo.png', chain: 'ronin', chainId: 747474, color: '#1273EA' },
-    // BNB Ecosystem
-    '204': { name: 'opBNB', rpc: 'https://opbnb-mainnet-rpc.bnbchain.org', explorer: 'https://opbnbscan.com', symbol: 'BNB', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/opbnb/info/logo.png', chain: 'opbnb', chainId: 204, color: '#F0B90B' },
-    // Emerging Chains
-    '80094': { name: 'Berachain', rpc: 'https://rpc.berachain.com', explorer: 'https://berascan.io', symbol: 'BERA', icon: 'https://icons.llamao.fi/icons/chains/rsz_berachain.jpg', chain: 'berachain', chainId: 80094, color: '#FF6B00' },
-    '146': { name: 'Sonic', rpc: 'https://rpc.soniclabs.com', explorer: 'https://sonicscan.org', symbol: 'S', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sonic/info/logo.png', chain: 'sonic', chainId: 146, color: '#0088FF' },
-    '999': { name: 'HyperEVM', rpc: 'https://rpc.hyperliquid.xyz/evm', explorer: 'https://explorer.hyperliquid.xyz', symbol: 'HYPE', icon: 'https://icons.llama.fi/hyperliquid.png', chain: 'hyperevm', chainId: 999, color: '#00FF88' },
-    '480': { name: 'World Chain', rpc: 'https://worldchain-mainnet.g.alchemy.com/public', explorer: 'https://worldscan.org', symbol: 'ETH', icon: 'https://icons.llama.fi/world-chain.png', chain: 'worldchain', chainId: 480, color: '#000000' },
-    '1923': { name: 'Swell Chain', rpc: 'https://swell-mainnet.alt.technology', explorer: 'https://explorer.swellnetwork.io', symbol: 'ETH', icon: 'https://icons.llama.fi/swell.png', chain: 'swell', chainId: 1923, color: '#3068F7' },
-    '2741': { name: 'Abstract', rpc: 'https://api.mainnet.abs.xyz', explorer: 'https://abscan.org', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_abstract.jpg', chain: 'abstract', chainId: 2741, color: '#00D632' },
-    '252': { name: 'Fraxtal', rpc: 'https://rpc.frax.com', explorer: 'https://fraxscan.com', symbol: 'frxETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_fraxtal.jpg', chain: 'fraxtal', chainId: 252, color: '#000000' },
-    '199': { name: 'BitTorrent Chain', rpc: 'https://rpc.bittorrentchain.io', explorer: 'https://bttcscan.com', symbol: 'BTT', icon: 'https://icons.llamao.fi/icons/chains/rsz_bittorrent.jpg', chain: 'bittorrent', chainId: 199, color: '#000000' },
-    '130': { name: 'Unichain', rpc: 'https://mainnet.unichain.org', explorer: 'https://uniscan.xyz', symbol: 'ETH', icon: 'https://icons.llamao.fi/icons/chains/rsz_unichain.jpg', chain: 'unichain', chainId: 130, color: '#FF007A' },
-    '143': { name: 'Monad', rpc: 'https://rpc.monad.xyz', explorer: 'https://explorer.monad.xyz', symbol: 'MON', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/monad/info/logo.png', chain: 'monad', chainId: 143, color: '#836EF9', enabled: false },
-    '988': { name: 'Stable Chain', rpc: 'https://rpc.stablechain.io', explorer: 'https://explorer.stablechain.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'stablechain', chainId: 988, color: '#00FF00' },
-    // ═══════════════════════════════════════════════════════════════════════════════
-    // TESTNETS
-    // ═══════════════════════════════════════════════════════════════════════════════
-    '11155111': { name: 'Sepolia', rpc: 'https://rpc.sepolia.org', explorer: 'https://sepolia.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png', chain: 'sepolia', chainId: 11155111, color: '#627EEA', testnet: true },
-    '80002': { name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology', explorer: 'https://amoy.polygonscan.com', symbol: 'POL', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png', chain: 'polygon-amoy', chainId: 80002, color: '#8247E5', testnet: true },
-    '421614': { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc', explorer: 'https://sepolia.arbiscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png', chain: 'arbitrum-sepolia', chainId: 421614, color: '#28A0F0', testnet: true },
-    '11155420': { name: 'Optimism Sepolia', rpc: 'https://sepolia.optimism.io', explorer: 'https://sepolia-optimism.etherscan.io', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png', chain: 'optimism-sepolia', chainId: 11155420, color: '#FF0420', testnet: true },
-    '84532': { name: 'Base Sepolia', rpc: 'https://sepolia.base.org', explorer: 'https://sepolia.basescan.org', symbol: 'ETH', icon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png', chain: 'base-sepolia', chainId: 84532, color: '#0052FF', testnet: true }
-};
+
+// NETWORKS object - будується динамічно з NetworkManager
+// Спочатку заповнюється hardcoded + testnets (синхронно)
+// Потім доповнюється user networks (async в init)
+let NETWORKS = {};
+
+// Build initial NETWORKS from NetworkManager (sync - hardcoded only)
+function buildInitialNetworks() {
+    // Add hardcoded mainnet networks
+    for (const net of NetworkManager.HARDCODED_NETWORKS) {
+        NETWORKS[String(net.chainId)] = {
+            name: net.name,
+            rpc: net.rpc,
+            explorer: net.explorer,
+            symbol: net.symbol,
+            icon: net.icon,
+            chain: net.chain,
+            chainId: net.chainId,
+            color: net.color,
+            capabilities: net.capabilities
+        };
+    }
+    
+    // Add testnets
+    for (const net of NetworkManager.TESTNET_NETWORKS) {
+        NETWORKS[String(net.chainId)] = {
+            name: net.name,
+            rpc: net.rpc,
+            explorer: net.explorer,
+            symbol: net.symbol,
+            icon: net.icon,
+            chain: net.chain,
+            chainId: net.chainId,
+            color: net.color,
+            testnet: true,
+            capabilities: net.capabilities
+        };
+    }
+    
+    console.log('[NETWORKS] Initial networks loaded:', Object.keys(NETWORKS).length);
+}
+
+// Call immediately after NetworkManager is available
+buildInitialNetworks();
+
+// Enabled networks - динамічно з NetworkManager
+let enabledNetworks = NetworkManager.HARDCODED_NETWORKS.map(n => String(n.chainId));
+
+// Update NETWORKS with user-added networks (async)
+async function updateNetworksWithUserData() {
+    try {
+        const userNetworks = await NetworkManager.getUserNetworks();
+        
+        for (const net of userNetworks) {
+            // Use NetworkManager's NETWORK_METADATA as fallback for missing symbol/icon/name
+            const meta = NetworkManager.NETWORK_METADATA?.[net.chainId] || {};
+
+            NETWORKS[String(net.chainId)] = {
+                name: net.name || meta.name || `Chain ${net.chainId}`,
+                rpc: net.rpc,
+                explorer: net.explorer,
+                symbol: net.symbol || meta.symbol || 'ETH',
+                icon: net.icon || meta.icon || '',
+                chain: net.chainName,
+                chainId: net.chainId,
+                color: net.color || meta.color || '#627EEA',
+                capabilities: net.capabilities
+            };
+            
+            // Add to enabled networks if not already there
+            const chainIdStr = String(net.chainId);
+            if (!enabledNetworks.includes(chainIdStr)) {
+                enabledNetworks.push(chainIdStr);
+            }
+            
+            // Add to FortixAPI CHAIN_MAPPING for swap/bridge
+            if (FortixAPI.addChainMapping && net.chainName) {
+                FortixAPI.addChainMapping(net.chainId, net.chainName);
+            }
+        }
+        
+        console.log('[NETWORKS] Updated with user networks. Total:', Object.keys(NETWORKS).length);
+    } catch (error) {
+        console.error('[NETWORKS] Failed to load user networks:', error);
+    }
+}
 
 // Recent networks storage key
 let recentNetworks = [];
@@ -250,7 +277,10 @@ const POPULAR_TOKENS = {
 
 // Get popular tokens for a specific network (used for fallback display)
 function getPopularTokensForNetwork(networkId) {
-    const tokens = POPULAR_TOKENS[networkId] || POPULAR_TOKENS['1'] || [];
+    // Use dynamic token list from API if available
+    const tokens = typeof getPopularTokensArray === 'function'
+        ? getPopularTokensArray(networkId)
+        : (POPULAR_TOKENS[networkId] || POPULAR_TOKENS['1'] || []);
     // Return first few tokens (stablecoins preferred)
     return tokens.slice(0, 4);
 }
@@ -359,12 +389,25 @@ document.addEventListener('error', function(e) {
 document.addEventListener('DOMContentLoaded', async () => {
     showLoader();
 
+    // CRITICAL: Initialize NetworkManager and load user networks FIRST
+    try {
+        await NetworkManager.init();
+        await updateNetworksWithUserData();
+        console.log('[OK] NetworkManager initialized, networks loaded:', Object.keys(NETWORKS).length);
+    } catch (e) {
+        console.error('[ERROR] Failed to initialize NetworkManager:', e);
+    }
+
     // CRITICAL: Setup event listeners FIRST to ensure UI is always responsive
     try {
         setupEventListeners();
         setupTokenTabs();
         setupSystemThemeListener();
         initApprovalModalListeners();
+        // Setup token address listener for auto-metadata fetch
+        if (typeof setupTokenAddressListener === 'function') {
+            setupTokenAddressListener();
+        }
         console.log('[OK] Event listeners initialized');
     } catch (e) {
         console.error('[ERROR] CRITICAL: Failed to setup event listeners:', e);
@@ -597,8 +640,8 @@ async function showApprovalScreen(txData) {
     document.getElementById('approvalScreen').style.display = 'flex';
     
     // CRITICAL: Reset button states for new transaction
-    const confirmBtn = document.getElementById('approvalScreenConfirmBtn');
-    const rejectBtn = document.getElementById('approvalScreenRejectBtn');
+    const confirmBtn = document.getElementById('approvalConfirmBtn');
+    const rejectBtn = document.getElementById('approvalRejectBtn');
     if (confirmBtn) {
         confirmBtn.disabled = false;
         confirmBtn.textContent = 'Confirm';
@@ -650,13 +693,19 @@ async function showApprovalScreen(txData) {
             displayUsd = '0.00';
         }
     } else {
-        // Native ETH transfer
+        // Native token transfer (ETH, BNB, FTM, etc.)
         recipientAddress = txData.transaction.to;
         const valueWei = BigInt(txData.transaction.value || '0');
-        const valueEth = Number(valueWei) / 1e18;
-        displayAmount = formatTokenBalance(valueEth, 'ETH');
-        displaySymbol = 'ETH';
-        displayUsd = (valueEth * ethPrice).toFixed(2);
+        const valueNative = Number(valueWei) / 1e18;
+
+        // Get correct symbol and price for current network
+        const nativeMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        const nativeSymbol = NETWORKS[currentNetwork]?.symbol || nativeMeta.symbol || 'ETH';
+        const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+
+        displayAmount = formatTokenBalance(valueNative, nativeSymbol);
+        displaySymbol = nativeSymbol;
+        displayUsd = (valueNative * nativePrice).toFixed(2);
     }
     
     // Set to address (recipient)
@@ -693,13 +742,19 @@ async function simulateApprovalTransaction(transaction) {
     const changesEl = document.getElementById('approvalSimBalanceChanges');
     const riskEl = document.getElementById('approvalSimRiskLevel');
     const confidenceEl = document.getElementById('approvalSimConfidence');
-    
+
+    // Check if elements exist (may not exist in send modal)
+    if (!previewEl) {
+        console.log('[SIM] Approval simulation preview elements not found, skipping');
+        return;
+    }
+
     // Show preview block with loading
     previewEl.style.display = 'block';
-    loadingEl.style.display = 'block';
-    errorEl.style.display = 'none';
-    changesEl.innerHTML = '';
-    riskEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) errorEl.style.display = 'none';
+    if (changesEl) changesEl.innerHTML = '';
+    if (riskEl) riskEl.style.display = 'none';
     
     try {
         console.log('[SIM] [Simulation] Starting transaction simulation...');
@@ -800,56 +855,64 @@ async function simulateApprovalTransaction(transaction) {
 async function estimateApprovalGas(transaction) {
     try {
         document.getElementById('approvalGasLoading').style.display = 'block';
-        
+
+        // Get correct symbol and price for current network
+        const gasMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        const gasSymbol = NETWORKS[currentNetwork]?.symbol || gasMeta.symbol || 'ETH';
+        const gasNativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+
         const response = await chrome.runtime.sendMessage({
             action: 'estimateGas',
             transaction: transaction
         });
-        
+
         if (!response.success) {
             throw new Error(response.error);
         }
-        
+
         const gasLimit = response.gasLimit;
         const baseFee = response.baseFee;
-        
+
         // MetaMask-style priority fees (in gwei)
         const speeds = {
             slow: { priority: 0.05 },
             normal: { priority: 0.1 },
             fast: { priority: 0.3 }
         };
-        
+
         for (const [speed, config] of Object.entries(speeds)) {
             const maxPriorityFee = config.priority;
             // MetaMask formula: maxFee = (2 × baseFee) + priorityFee
             const maxFee = (2 * baseFee) + maxPriorityFee;
-            
+
             const gasCostWei = gasLimit * maxFee * 1e9;
-            const gasCostEth = gasCostWei / 1e18;
-            const gasCostUsd = gasCostEth * ethPrice;
-            
+            const gasCostNative = gasCostWei / 1e18;
+            const gasCostUsd = gasCostNative * gasNativePrice;
+
             gasEstimates[speed] = {
                 gasLimit,
                 maxPriorityFee,
                 maxFee,
-                costEth: gasCostEth,
-                costUsd: gasCostUsd
+                costEth: gasCostNative,
+                costUsd: gasCostUsd,
+                symbol: gasSymbol
             };
-            
+
             const speedCapitalized = speed.charAt(0).toUpperCase() + speed.slice(1);
-            document.getElementById(`gas${speedCapitalized}ETH`).textContent = 
-                gasCostEth.toFixed(6) + ' ETH';
+            document.getElementById(`gas${speedCapitalized}ETH`).textContent =
+                gasCostNative.toFixed(6) + ' ' + gasSymbol;
         }
-        
+
         document.getElementById('approvalGasLoading').style.display = 'none';
         updateApprovalGasDisplay();
         updateApprovalTotal();
-        
+
     } catch (error) {
         console.error('Error estimating gas:', error);
+        const gasMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        const gasSymbol = NETWORKS[currentNetwork]?.symbol || gasMeta.symbol || 'ETH';
         const errorMsg = error.message?.includes('insufficient')
-            ? 'Insufficient ETH for gas'
+            ? `Insufficient ${gasSymbol} for gas`
             : 'Unable to estimate gas. Check transaction details.';
         document.getElementById('approvalGasLoading').textContent = errorMsg;
     }
@@ -865,16 +928,21 @@ function updateApprovalGasDisplay() {
 function updateApprovalTotal() {
     // For token transfers, value is 0, only gas cost matters
     const valueWei = BigInt(pendingTxData.transaction.value || '0');
-    const valueEth = Number(valueWei) / 1e18;
-    
+    const valueNative = Number(valueWei) / 1e18;
+
     const selected = gasEstimates[selectedGasSpeed];
     if (!selected) return;
-    
-    // Total in ETH (value + gas)
-    const totalEth = valueEth + selected.costEth;
-    const totalUsd = totalEth * ethPrice;
-    
-    document.getElementById('approvalTotalETH').textContent = totalEth.toFixed(6) + ' ETH';
+
+    // Get correct symbol and price for current network
+    const totalMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+    const totalSymbol = selected.symbol || NETWORKS[currentNetwork]?.symbol || totalMeta.symbol || 'ETH';
+    const totalNativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+
+    // Total in native token (value + gas)
+    const totalNative = valueNative + selected.costEth;
+    const totalUsd = totalNative * totalNativePrice;
+
+    document.getElementById('approvalTotalETH').textContent = totalNative.toFixed(6) + ' ' + totalSymbol;
     document.getElementById('approvalTotalUSD').textContent = `$${totalUsd.toFixed(2)}`;
 }
 
@@ -899,9 +967,14 @@ async function handleApprovalReject() {
 }
 
 async function handleApprovalConfirm() {
-    const confirmBtn = document.getElementById('approvalScreenConfirmBtn');
-    const rejectBtn = document.getElementById('approvalScreenRejectBtn');
-    
+    console.log('[CONFIRM] handleApprovalConfirm called');
+    console.log('[CONFIRM] gasEstimates:', gasEstimates);
+    console.log('[CONFIRM] selectedGasSpeed:', selectedGasSpeed);
+    console.log('[CONFIRM] pendingTxData:', pendingTxData);
+
+    const confirmBtn = document.getElementById('approvalConfirmBtn');
+    const rejectBtn = document.getElementById('approvalRejectBtn');
+
     try {
         if (confirmBtn) {
             confirmBtn.disabled = true;
@@ -910,8 +983,19 @@ async function handleApprovalConfirm() {
         if (rejectBtn) {
             rejectBtn.disabled = true;
         }
-        
+
         const selected = gasEstimates[selectedGasSpeed];
+        if (!selected) {
+            console.error('[ERROR] No gas estimate selected! gasEstimates:', gasEstimates, 'selectedGasSpeed:', selectedGasSpeed);
+            showToast('Gas estimation failed. Please try again.', 'error');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm';
+            }
+            if (rejectBtn) rejectBtn.disabled = false;
+            return;
+        }
+
         const fromAddress = pendingTxData.transaction.from.toLowerCase();
         let handled = false; // Flag to prevent duplicate handling
         
@@ -1084,6 +1168,9 @@ function populateNetworkList(filter = '') {
     
     const filterLower = filter.toLowerCase().trim();
     
+    // Get hardcoded chain IDs
+    const hardcodedIds = NetworkManager.HARDCODED_NETWORKS.map(n => String(n.chainId));
+    
     // Mainnet priority order
     const NETWORK_PRIORITY = [
         '1', '8453', '42161', '10', '137', '56', '43114', // Tier 1
@@ -1157,28 +1244,38 @@ function populateNetworkList(filter = '') {
         listContainer.innerHTML = `
             <div class="network-list-empty">
                 <p>No networks found</p>
-                <p style="font-size: 11px; margin-top: 8px;">Enable more networks in Settings → Manage Networks</p>
             </div>
         `;
         return;
     }
     
-    // Render flat list
+    // Render flat list with toggles for user-added networks
     listContainer.innerHTML = networkIds.map(id => {
         const network = NETWORKS[id];
         const isSelected = id === currentNetwork;
+        const isHardcoded = hardcodedIds.includes(id);
+        const isUserAdded = !isHardcoded && !network.testnet;
         const balanceUSD = getNetworkBalanceUSD(id);
         const balanceDisplay = balanceUSD > 0 ? formatCurrency(balanceUSD) : '$0.00';
         const colorStyle = network.color ? `border-left-color: ${network.color};` : '';
         const testnetBadge = network.testnet ? '<span class="network-testnet-badge">TESTNET</span>' : '';
         
+        // Toggle for user-added networks (to remove)
+        const toggleHtml = isUserAdded ? `
+            <label class="network-toggle" onclick="event.stopPropagation();">
+                <input type="checkbox" checked data-chain-id="${id}">
+                <span class="network-toggle-slider"></span>
+            </label>
+        ` : '';
+        
         return `
-            <div class="network-list-item ${isSelected ? 'selected' : ''} ${network.testnet ? 'testnet' : ''}" data-network="${id}" style="${colorStyle}">
+            <div class="network-list-item ${isSelected ? 'selected' : ''} ${network.testnet ? 'testnet' : ''} ${isUserAdded ? 'user-added' : ''}" data-network="${id}" style="${colorStyle}">
                 <img class="network-item-icon img-fallback" src="${network.icon}" data-fallback="../assets/token-icons/eth.svg" alt="">
                 <div class="network-item-info">
                     <div class="network-item-name">${network.name}${testnetBadge}</div>
                     <div class="network-item-chain" style="color: ${balanceUSD > 0 ? 'var(--success)' : 'var(--text-muted)'}">${balanceDisplay}</div>
                 </div>
+                ${toggleHtml}
                 <svg class="network-item-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
@@ -1186,9 +1283,12 @@ function populateNetworkList(filter = '') {
         `;
     }).join('');
     
-    // Add click handlers
+    // Add click handlers for network selection
     listContainer.querySelectorAll('.network-list-item').forEach(item => {
         item.addEventListener('click', async (e) => {
+            // Don't select if clicking on toggle
+            if (e.target.closest('.network-toggle')) return;
+            
             e.preventDefault();
             e.stopPropagation();
             
@@ -1197,6 +1297,47 @@ function populateNetworkList(filter = '') {
             
             if (networkId) {
                 await selectNetwork(networkId);
+            }
+        });
+    });
+    
+    // Add toggle handlers for removing user-added networks
+    listContainer.querySelectorAll('.network-toggle input').forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+            e.stopPropagation();
+            const chainId = e.target.dataset.chainId;
+            
+            if (!e.target.checked) {
+                // Remove network
+                try {
+                    const network = NETWORKS[chainId];
+                    if (confirm(`Remove ${network?.name || 'this network'}?`)) {
+                        await NetworkManager.removeNetwork(parseInt(chainId));
+                        
+                        // Remove from global NETWORKS
+                        delete NETWORKS[chainId];
+                        
+                        // Remove from enabledNetworks
+                        enabledNetworks = enabledNetworks.filter(id => id !== chainId);
+                        await chrome.storage.local.set({ enabledNetworks });
+                        
+                        // If current network was removed, switch to Ethereum
+                        if (currentNetwork === chainId) {
+                            await selectNetwork('1');
+                        }
+                        
+                        // Refresh list
+                        populateNetworkList(filter);
+                        showToast(`${network?.name || 'Network'} removed`, 'success');
+                    } else {
+                        // User cancelled - restore toggle
+                        e.target.checked = true;
+                    }
+                } catch (error) {
+                    console.error('Failed to remove network:', error);
+                    e.target.checked = true;
+                    showToast('Failed to remove network', 'error');
+                }
             }
         });
     });
@@ -1264,9 +1405,16 @@ function setupNetworkModalListeners() {
     const searchContainer = document.getElementById('networkSearchContainer');
     const searchClear = document.getElementById('networkSearchClear');
     const testnetToggle = document.getElementById('showTestnetsToggle');
+    const addBtn = document.getElementById('networkAddFooterBtn');
     
     // Close button
     closeBtn?.addEventListener('click', closeNetworkModal);
+    
+    // Add network button - opens Add Network modal
+    addBtn?.addEventListener('click', () => {
+        closeNetworkModal();
+        openAddNetworkModal();
+    });
     
     // Click outside to close
     modal?.addEventListener('click', (e) => {

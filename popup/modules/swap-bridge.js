@@ -6,6 +6,94 @@ let currentSwapBridgeTab = 'swap';
 let currentSwapMode = 'swap'; // 'swap' or 'bridge'
 let currentNetworkPickerType = null; // 'from' or 'to'
 
+/**
+ * Populate bridge network dropdowns dynamically
+ * Uses NetworkManager capabilities to show only bridge-supported networks
+ */
+function populateBridgeNetworks() {
+    const fromSelect = document.getElementById('bridgeFromNetwork');
+    const toSelect = document.getElementById('bridgeToNetwork');
+    
+    if (!fromSelect || !toSelect) return;
+    
+    // Get networks that support bridge
+    const bridgeNetworks = enabledNetworks.filter(chainId => {
+        const network = NETWORKS[chainId];
+        if (!network) return false;
+        
+        // Check capabilities
+        const caps = network.capabilities;
+        if (caps) {
+            return caps.bridge || (caps.bridgeAggregators && caps.bridgeAggregators.length > 0);
+        }
+        
+        // Fallback: check if network has CHAIN_MAPPING (for backward compatibility)
+        return FortixAPI.CHAIN_MAPPING[chainId];
+    });
+    
+    // Sort: hardcoded networks first
+    const hardcodedIds = ['1', '56', '137', '42161', '10', '8453', '43114'];
+    const sortedNetworks = [...bridgeNetworks].sort((a, b) => {
+        const aHardcoded = hardcodedIds.includes(a);
+        const bHardcoded = hardcodedIds.includes(b);
+        if (aHardcoded && !bHardcoded) return -1;
+        if (!aHardcoded && bHardcoded) return 1;
+        return 0;
+    });
+    
+    // Build options HTML
+    const buildOptions = (selected) => sortedNetworks.map(chainId => {
+        const network = NETWORKS[chainId];
+        return `<option value="${chainId}" ${chainId === selected ? 'selected' : ''}>${network.name}</option>`;
+    }).join('');
+    
+    // Set current network as default for FROM
+    const currentNetworkStr = String(currentNetwork);
+    const fromSelected = bridgeNetworks.includes(currentNetworkStr) ? currentNetworkStr : bridgeNetworks[0];
+    
+    // Set different network for TO (first that's not FROM)
+    const toSelected = sortedNetworks.find(id => id !== fromSelected) || sortedNetworks[0];
+    
+    fromSelect.innerHTML = buildOptions(fromSelected);
+    toSelect.innerHTML = buildOptions(toSelected);
+    
+    console.log('[Bridge] Populated networks:', bridgeNetworks.length, 'bridge-capable networks');
+}
+
+/**
+ * Check if network supports swap operations
+ */
+function networkSupportsSwap(chainId) {
+    const network = NETWORKS[chainId];
+    if (!network) return false;
+    
+    // Check capabilities first
+    const caps = network.capabilities;
+    if (caps) {
+        return caps.swap || (caps.swapAggregators && caps.swapAggregators.length > 0);
+    }
+    
+    // Fallback: check CHAIN_MAPPING
+    return !!FortixAPI.CHAIN_MAPPING[chainId];
+}
+
+/**
+ * Check if network supports bridge operations
+ */
+function networkSupportsBridge(chainId) {
+    const network = NETWORKS[chainId];
+    if (!network) return false;
+    
+    // Check capabilities first
+    const caps = network.capabilities;
+    if (caps) {
+        return caps.bridge || (caps.bridgeAggregators && caps.bridgeAggregators.length > 0);
+    }
+    
+    // Fallback: check CHAIN_MAPPING
+    return !!FortixAPI.CHAIN_MAPPING[chainId];
+}
+
 // Check and update swap/bridge mode based on networks
 function updateSwapBridgeMode() {
     const fromNetwork = document.getElementById('swapFromNetwork')?.value || currentNetwork;
@@ -88,8 +176,8 @@ async function openNetworkPickerModal(type) {
         '80094', '146', '999', '480', '1923', '2741', '252', '199', '130', '143', '988' // Emerging
     ];
     
-    // Available networks for swap/bridge - all enabled networks that have CHAIN_MAPPING
-    const networks = enabledNetworks.filter(id => FortixAPI.CHAIN_MAPPING[id]);
+    // Available networks for swap/bridge - check capabilities or CHAIN_MAPPING
+    const networks = enabledNetworks.filter(id => networkSupportsSwap(id));
     
     const isFromSelector = type === 'from';
     
@@ -192,22 +280,32 @@ function closeNetworkPickerModal() {
 // Select network from picker
 function selectNetworkFromPicker(networkId) {
     if (!currentNetworkPickerType) return;
-    
+
+    // Stop quote refresh and clear MAX mode when network changes
+    if (typeof stopQuoteRefresh === 'function') {
+        stopQuoteRefresh();
+    }
+    if (typeof clearMaxModeState === 'function') {
+        clearMaxModeState();
+    }
+
     const prefix = currentNetworkPickerType === 'from' ? 'swapFrom' : 'swapTo';
     const network = NETWORKS[networkId];
     const icon = getNetworkIcon(networkId);
-    
+    // Fallback to NETWORK_METADATA for user networks with missing data
+    const meta = NetworkManager.NETWORK_METADATA?.[parseInt(networkId)] || {};
+
     document.getElementById(`${prefix}Network`).value = networkId;
     document.getElementById(`${prefix}NetworkIcon`).src = icon;
-    document.getElementById(`${prefix}NetworkName`).textContent = network?.name || 'Unknown';
-    
+    document.getElementById(`${prefix}NetworkName`).textContent = network?.name || meta.name || 'Unknown';
+
     // Update token to native of selected network
-    const nativeSymbol = network?.symbol || 'ETH';
+    const nativeSymbol = network?.symbol || meta.symbol || 'ETH';
     selectToken(currentNetworkPickerType, nativeSymbol, networkId);
-    
+
     closeNetworkPickerModal();
-    
-    // Update mode and tokens
+
+    // Update mode and tokens (this will fetch new quote if amount exists)
     updateSwapBridgeMode();
 }
 
@@ -276,10 +374,31 @@ async function executeBridgeFromUnified() {
             throw new Error('Missing quote data. Please get a new quote.');
         }
 
-        console.log('[BRIDGE] Calling FortixAPI.executeSwap for aggregator:', aggregator);
+        // Get selectedQuote for route consistency (prevents Rango from returning different route)
+        const selectedQuote = currentBridgeQuote._selectedQuote;
+        const quoteTimestamp = currentBridgeQuote._selectedQuoteTimestamp;
 
-        // NEW: Call executeSwap to get transaction data for bridge
-        const executeResponse = await FortixAPI.executeSwap(aggregator, quoteRequest);
+        // Validate quote TTL (default 30 seconds)
+        const quoteTTL = selectedQuote?.ttl || 30;
+        const quoteAge = quoteTimestamp ? (Date.now() - quoteTimestamp) / 1000 : Infinity;
+
+        if (quoteAge > quoteTTL) {
+            console.warn('[BRIDGE] Quote expired:', { quoteAge, quoteTTL });
+            showToast('Quote expired. Please refresh and try again.', 'warning');
+            hideLoader();
+            document.getElementById('swapConfirmBtn').disabled = false;
+            document.getElementById('swapConfirmBtn').textContent = 'Bridge';
+            return;
+        }
+
+        console.log('[BRIDGE] Calling FortixAPI.executeSwap for aggregator:', aggregator, {
+            hasSelectedQuote: !!selectedQuote,
+            requestId: selectedQuote?.requestId,
+            quoteAge: quoteAge.toFixed(1) + 's'
+        });
+
+        // Pass selectedQuote to ensure same route is used
+        const executeResponse = await FortixAPI.executeSwap(aggregator, quoteRequest, selectedQuote);
 
         console.log('[BRIDGE] executeResponse:', executeResponse);
 
@@ -339,15 +458,14 @@ async function executeBridgeFromUnified() {
                 
                 console.log('[BRIDGE] Checking allowance for spender:', spenderAddress);
                 
-                const rpcUrl = getRpcUrlForChain(quoteRequest.fromChain);
-                console.log('[BRIDGE] Using RPC URL:', rpcUrl, 'for chain:', quoteRequest.fromChain);
-                
+                console.log('[BRIDGE] Checking allowance for chain:', quoteRequest.fromChain);
+
                 const allowanceCheck = await checkTokenAllowance(
                     fromTokenAddress,
                     currentAccount.address,
                     spenderAddress,
                     quoteRequest.amount,
-                    rpcUrl
+                    quoteRequest.fromChain // Pass chain name, backend handles RPC
                 );
                 
                 console.log('[BRIDGE] Allowance check result:', allowanceCheck);
@@ -488,7 +606,12 @@ async function executeBridgeFromUnified() {
                     bridgeBtn.disabled = false;
                     bridgeBtn.classList.add('bridge-ready-after-approval');
                     bridgeBtn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
-                    
+
+                    // Restart quote refresh after approval (crosschain)
+                    if (typeof startQuoteRefresh === 'function') {
+                        startQuoteRefresh();
+                    }
+
                     // Return without executing bridge - user must click again
                     return;
                     // ============ END VARIANT A FOR BRIDGE ============
@@ -655,7 +778,7 @@ async function executeBridgeAfterApproval() {
         
         // Get receive amount
         const toAmountFormatted = toAmount || fromAmount;
-        
+
         // Send bridge transaction
         const response = await chrome.runtime.sendMessage({
             action: 'executeBridge',
@@ -717,8 +840,9 @@ async function updateBridgeBalance() {
     console.log('[BRIDGE] updateBridgeBalance called:', { fromNetwork, hasBalanceEl: !!balanceEl });
     
     if (!fromNetwork || !balanceEl) return;
-    
-    const symbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+
+    const meta = NetworkManager.NETWORK_METADATA?.[parseInt(fromNetwork)] || {};
+    const symbol = NETWORKS[fromNetwork]?.symbol || meta.symbol || 'ETH';
     
     try {
         balanceEl.textContent = `Balance: Loading...`;
@@ -747,51 +871,119 @@ async function updateBridgeBalance() {
     }
 }
 
+/**
+ * Get gas estimate from dry-run bridge quote
+ * Makes a test quote request with small amount to get real gas limit from LI.FI
+ * @param {string} fromNetwork - Source chain ID
+ * @param {string} toNetwork - Destination chain ID
+ * @param {string} fromAddress - User's wallet address
+ * @returns {Promise<{success: boolean, gasLimit?: number, gasPrice?: bigint, error?: string}>}
+ */
+async function getDryRunBridgeGasEstimate(fromNetwork, toNetwork, fromAddress) {
+    try {
+        console.log('[BRIDGE] Getting dry-run gas estimate:', { fromNetwork, toNetwork });
+
+        // Use small test amount for gas estimation (0.01 ETH)
+        const testAmount = '0.01';
+
+        const response = await chrome.runtime.sendMessage({
+            action: 'getBridgeQuote',
+            fromChain: fromNetwork,
+            toChain: toNetwork,
+            amount: testAmount,
+            fromAddress: fromAddress
+        });
+
+        if (!response.success || !response.quote) {
+            console.warn('[BRIDGE] Dry-run quote failed:', response.error);
+            return { success: false, error: response.error };
+        }
+
+        // Extract gas info from transactionRequest
+        const txRequest = response.quote.transactionRequest;
+        if (!txRequest) {
+            console.warn('[BRIDGE] No transactionRequest in dry-run quote');
+            return { success: false, error: 'No transaction data' };
+        }
+
+        // Get gasLimit from quote (supports both gasLimit and gas fields)
+        const gasLimitHex = txRequest.gasLimit || txRequest.gas;
+        const gasLimit = gasLimitHex ? parseInt(gasLimitHex, 16) : 500000;
+
+        // Get gas price if available
+        const maxFeePerGas = txRequest.maxFeePerGas ? BigInt(txRequest.maxFeePerGas) : null;
+        const gasPrice = txRequest.gasPrice ? BigInt(txRequest.gasPrice) : null;
+
+        console.log('[BRIDGE] Dry-run gas estimate:', {
+            gasLimit,
+            maxFeePerGas: maxFeePerGas?.toString(),
+            gasPrice: gasPrice?.toString()
+        });
+
+        return {
+            success: true,
+            gasLimit,
+            maxFeePerGas,
+            gasPrice
+        };
+    } catch (error) {
+        console.error('[BRIDGE] Dry-run gas estimate error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 async function setBridgeMaxAmount2() {
     const fromNetwork = document.getElementById('bridgeFromNetwork2').value;
-    
-    console.log('[BRIDGE] setBridgeMaxAmount2 called:', { fromNetwork, address: currentAccount?.address });
-    
+    const toNetwork = document.getElementById('bridgeToNetwork2').value;
+
+    console.log('[BRIDGE] setBridgeMaxAmount2 called:', { fromNetwork, toNetwork, address: currentAccount?.address });
+
     try {
         showLoader();
-        
+
         // Get balance
         const response = await chrome.runtime.sendMessage({
             action: 'getBalance',
             address: currentAccount.address,
             network: fromNetwork
         });
-        
+
         if (!response.success) {
             console.error('[BRIDGE] getBalance failed:', response.error);
             hideLoader();
             return;
         }
-        
+
         const balance = parseFloat(response.balance);
-        
+
         // Update balance display
-        const symbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+        const bridgeMeta = NetworkManager.NETWORK_METADATA?.[parseInt(fromNetwork)] || {};
+        const symbol = NETWORKS[fromNetwork]?.symbol || bridgeMeta.symbol || 'ETH';
         document.getElementById('bridgeAvailableBalance').textContent = `Balance: ${formatTokenBalance(balance, symbol)} ${symbol}`;
-        
-        // Calculate MAX with realtime gas (bridge needs 2x multiplier due to variable gas usage)
-        const result = await calculateMaxAmount(fromNetwork, balance, 'bridge', 2.0);
-        
-        if (result.success) {
+
+        // Use unified MaxCalculator
+        const result = await MaxCalculator.calculate({
+            operation: 'bridge',
+            tokenType: 'native',
+            fromNetwork: fromNetwork,
+            toNetwork: toNetwork,
+            nativeBalance: balance,
+            userAddress: currentAccount?.address
+        });
+
+        if (result.success && result.maxAmount > 0) {
             // Always round DOWN to never exceed balance
             const flooredMax = Math.floor(result.maxAmount * 1000000) / 1000000;
             document.getElementById('bridgeAmount2').value = flooredMax.toFixed(6);
             console.log('[BRIDGE] Bridge MAX set:', {
                 balance: balance.toFixed(6),
                 maxAmount: flooredMax.toFixed(6),
-                gasReserve: result.reserveAmount.toFixed(6),
-                isFallback: result.isFallback || false
+                gasReserve: result.gasReserve.toFixed(6)
             });
-            
-            // Start watcher for auto-update (bridge needs 2.0x multiplier)
-            startMaxWatcher('bridge2', 'bridgeAmount2', fromNetwork, balance, 'bridge', 2.0);
+        } else {
+            showToast(result.error || 'Failed to calculate max amount', 'error');
         }
-        
+
     } catch (error) {
         console.error('Error getting balance:', error);
     } finally {
@@ -834,9 +1026,10 @@ async function getBridgeQuote2() {
         });
         
         console.log('Bridge quote response:', response);
-        
+
         if (response.success && response.quote) {
-            const toSymbol = NETWORKS[toNetwork]?.symbol || 'ETH';
+            const toMeta = NetworkManager.NETWORK_METADATA?.[parseInt(toNetwork)] || {};
+            const toSymbol = NETWORKS[toNetwork]?.symbol || toMeta.symbol || 'ETH';
             // Display quote
             document.getElementById('bridgeTime2').textContent = response.quote.estimatedTime || '~5 mins';
             document.getElementById('bridgeFee2').textContent = response.quote.fee || '~0.001 ETH';
@@ -893,7 +1086,9 @@ async function executeBridge2() {
         });
         
         if (response.success) {
-            showToast(`Bridge submitted! ${amount} ETH from ${NETWORKS[fromNetwork]?.name || fromNetwork} to ${NETWORKS[toNetwork]?.name || toNetwork}`, 'success');
+            const bridgeFromMeta = NetworkManager.NETWORK_METADATA?.[parseInt(fromNetwork)] || {};
+            const bridgeSymbol = NETWORKS[fromNetwork]?.symbol || bridgeFromMeta.symbol || 'ETH';
+            showToast(`Bridge submitted! ${amount} ${bridgeSymbol} from ${NETWORKS[fromNetwork]?.name || fromNetwork} to ${NETWORKS[toNetwork]?.name || toNetwork}`, 'success');
             closeModal('swapModal');
             
             // Refresh transactions immediately
@@ -926,31 +1121,39 @@ async function executeBridge2() {
 // Set max amount for bridge
 async function setBridgeMaxAmount() {
     const fromNetwork = document.getElementById('bridgeFromNetwork').value;
-    
-    console.log('[BRIDGE] setBridgeMaxAmount called:', { fromNetwork, address: currentAccount?.address });
-    
+    const toNetwork = document.getElementById('bridgeToNetwork').value;
+
+    console.log('[BRIDGE] setBridgeMaxAmount called:', { fromNetwork, toNetwork, address: currentAccount?.address });
+
     try {
         showLoader();
-        
+
         // Get balance
         const response = await chrome.runtime.sendMessage({
             action: 'getBalance',
             address: currentAccount.address,
             network: fromNetwork
         });
-        
+
         if (!response.success) {
             console.error('Error getting balance for bridge max:', response.error);
             hideLoader();
             return;
         }
-        
+
         const balance = parseFloat(response.balance);
-        
-        // Calculate MAX with realtime gas (bridge needs 2x multiplier due to variable gas usage)
-        const result = await calculateMaxAmount(fromNetwork, balance, 'bridge', 2.0);
-        
-        if (result.success) {
+
+        // Use unified MaxCalculator
+        const result = await MaxCalculator.calculate({
+            operation: 'bridge',
+            tokenType: 'native',
+            fromNetwork: fromNetwork,
+            toNetwork: toNetwork,
+            nativeBalance: balance,
+            userAddress: currentAccount?.address
+        });
+
+        if (result.success && result.maxAmount > 0) {
             // Always round DOWN to never exceed balance
             const flooredMax = Math.floor(result.maxAmount * 1000000) / 1000000;
             document.getElementById('bridgeAmount').value = flooredMax.toFixed(6);
@@ -958,14 +1161,12 @@ async function setBridgeMaxAmount() {
                 network: NETWORKS[fromNetwork]?.name,
                 balance: balance.toFixed(6),
                 maxAmount: flooredMax.toFixed(6),
-                gasReserve: result.reserveAmount.toFixed(6),
-                isFallback: result.isFallback || false
+                gasReserve: result.gasReserve.toFixed(6)
             });
-            
-            // Start watcher for auto-update (bridge needs 2.0x multiplier)
-            startMaxWatcher('bridge1', 'bridgeAmount', fromNetwork, balance, 'bridge', 2.0);
+        } else {
+            showToast(result.error || 'Failed to calculate max amount', 'error');
         }
-        
+
     } catch (error) {
         console.error('Error calculating bridge MAX:', error);
     } finally {
@@ -1009,7 +1210,8 @@ async function getBridgeQuote() {
     }
     
     if (amount > balance) {
-        const symbol = NETWORKS[fromNetwork]?.symbol || 'ETH';
+        const balMeta = NetworkManager.NETWORK_METADATA?.[parseInt(fromNetwork)] || {};
+        const symbol = NETWORKS[fromNetwork]?.symbol || balMeta.symbol || 'ETH';
         showToast(`Insufficient balance. Available: ${balance.toFixed(6)} ${symbol}`, 'error');
         return;
     }
@@ -1187,15 +1389,20 @@ async function addNewAccount() {
 // Update send USD value
 function updateSendUSD() {
     const amount = parseFloat(document.getElementById('sendAmount').value) || 0;
-    
+
     if (selectedAsset && selectedAsset.type === 'native') {
+        // Get correct symbol and price for current network
+        const sendMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        const nativeSymbol = selectedAsset.symbol || NETWORKS[currentNetwork]?.symbol || sendMeta.symbol || 'ETH';
+        const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+
         if (isUSDMode) {
-            // Input is in USD, show ETH equivalent
-            const eth = ethPrice > 0 ? (amount / ethPrice).toFixed(6) : '0.000000';
-            document.getElementById('sendAmountEquivalent').textContent = `≈ ${eth} ETH`;
+            // Input is in USD, show native token equivalent
+            const nativeAmt = nativePrice > 0 ? (amount / nativePrice).toFixed(6) : '0.000000';
+            document.getElementById('sendAmountEquivalent').textContent = `≈ ${nativeAmt} ${nativeSymbol}`;
         } else {
-            // Input is in ETH, show USD equivalent
-            const usd = (amount * ethPrice).toFixed(2);
+            // Input is in native token, show USD equivalent
+            const usd = (amount * nativePrice).toFixed(2);
             document.getElementById('sendAmountEquivalent').textContent = `≈ $${usd}`;
         }
     } else {
@@ -1204,38 +1411,43 @@ function updateSendUSD() {
     }
 }
 
-// Toggle between ETH and USD input
+// Toggle between native token and USD input
 function toggleCurrency() {
     if (!selectedAsset || selectedAsset.type !== 'native') {
         showToast('Currency toggle only works for native tokens', 'warning');
         return;
     }
-    
-    if (ethPrice === 0) {
-        showToast('ETH price not loaded yet', 'warning');
+
+    // Get correct symbol and price for current network
+    const toggleMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+    const nativeSymbol = selectedAsset.symbol || NETWORKS[currentNetwork]?.symbol || toggleMeta.symbol || 'ETH';
+    const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+
+    if (nativePrice === 0) {
+        showToast(`${nativeSymbol} price not loaded yet`, 'warning');
         return;
     }
-    
+
     const currentValue = parseFloat(document.getElementById('sendAmount').value) || 0;
-    
+
     // Toggle mode
     isUSDMode = !isUSDMode;
-    
+
     // Convert value
     if (isUSDMode) {
-        // Was ETH, now USD
-        const usdValue = currentValue * ethPrice;
+        // Was native token, now USD
+        const usdValue = currentValue * nativePrice;
         document.getElementById('sendAmount').value = usdValue.toFixed(2);
         document.getElementById('sendAssetSymbol').textContent = 'USD';
         document.getElementById('sendAmount').step = '0.01';
     } else {
-        // Was USD, now ETH
-        const ethValue = currentValue / ethPrice;
-        document.getElementById('sendAmount').value = ethValue.toFixed(6);
-        document.getElementById('sendAssetSymbol').textContent = selectedAsset.symbol;
+        // Was USD, now native token
+        const nativeValue = currentValue / nativePrice;
+        document.getElementById('sendAmount').value = nativeValue.toFixed(6);
+        document.getElementById('sendAssetSymbol').textContent = nativeSymbol;
         document.getElementById('sendAmount').step = '0.000001';
     }
-    
+
     // Update equivalent display
     updateSendUSD();
     validateSendForm();
@@ -1245,8 +1457,10 @@ function toggleCurrency() {
 async function populateSendAssets() {
     // Update network display
     const networkIcon = getNetworkIcon(currentNetwork);
-    const networkName = NETWORKS[currentNetwork]?.name || 'Ethereum';
-    const nativeSymbol = NETWORKS[currentNetwork]?.symbol || 'ETH';
+    // Use NETWORK_METADATA as fallback for user networks with missing data
+    const meta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+    const networkName = NETWORKS[currentNetwork]?.name || meta.name || 'Unknown Network';
+    const nativeSymbol = NETWORKS[currentNetwork]?.symbol || meta.symbol || 'ETH';
     
     document.getElementById('sendNetworkIcon').src = networkIcon;
     document.getElementById('sendNetworkName').textContent = networkName;
@@ -1515,8 +1729,9 @@ function validateSendForm() {
         // Convert input to token amount if in USD mode
         let amountInToken = amountInput;
         if (isUSDMode && selectedAsset.type === 'native') {
-            // USD mode - convert to ETH
-            amountInToken = amountInput / (ethPrice || 3500);
+            // USD mode - convert to native token using BalanceManager (NO HARDCODED FALLBACK)
+            const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+            amountInToken = nativePrice > 0 ? amountInput / nativePrice : 0;
         }
         
         if (amountInToken > balance) {
@@ -1536,75 +1751,71 @@ function validateSendForm() {
 // Set max amount
 async function setMaxAmount() {
     if (!selectedAsset) return;
-    
+
     const balance = parseFloat(selectedAsset.balance) || 0;
-    
-    if (selectedAsset.type === 'native') {
-        showLoader();
-        
-        try {
-            // Calculate MAX with realtime gas (transfer operation, 1.2x multiplier)
-            const result = await calculateMaxAmount(currentNetwork, balance, 'transfer', 1.2);
-            
-            if (result.success) {
-                const maxAmount = result.maxAmount;
-                
-                // Set value based on mode
-                if (isUSDMode) {
-                    const maxAmountUSD = maxAmount * ethPrice;
-                    document.getElementById('sendAmount').value = maxAmountUSD.toFixed(2);
-                } else {
-                    document.getElementById('sendAmount').value = maxAmount.toFixed(6);
-                }
-                
-                console.log(`[BALANCE] Send MAX calculated:`, {
-                    balance: balance.toFixed(6),
-                    gasReserve: result.reserveAmount.toFixed(6),
-                    maxSend: maxAmount.toFixed(6),
-                    mode: isUSDMode ? 'USD' : 'ETH',
-                    isFallback: result.isFallback || false
-                });
-                
-                // Start watcher for auto-update (only for native token)
-                startMaxWatcher('send', 'sendAmount', currentNetwork, balance, 'transfer', 1.2);
-            }
-        } catch (error) {
-            console.error('Error calculating MAX:', error);
-        } finally {
-            hideLoader();
+    const isNative = selectedAsset.type === 'native';
+
+    showLoader();
+
+    try {
+        // Get native balance for gas validation (for ERC20)
+        let nativeBalance = balance;
+        if (!isNative) {
+            // Get native balance from cache
+            nativeBalance = tokenDataCache.nativeBalance || parseFloat(currentAccount?.balance) || 0;
         }
-    } else {
-        // For tokens, apply $0.01 buffer to prevent "insufficient balance" errors
-        const tokenPrice = selectedAsset.price || 0;
-        
-        if (tokenPrice > 0) {
-            const balanceUsd = balance * tokenPrice;
-            // Subtract $0.01 buffer and floor to cent
-            const safeValueUsd = Math.floor((balanceUsd - 0.01) * 100) / 100;
-            
-            if (safeValueUsd > 0) {
-                const safeAmount = safeValueUsd / tokenPrice;
-                // Round down to 6 decimals
-                const safeAmountRounded = Math.floor(safeAmount * 1000000) / 1000000;
-                document.getElementById('sendAmount').value = safeAmountRounded.toFixed(6);
-                
-                console.log('[MAX] Send token with $0.01 buffer:', {
-                    balance: balance,
-                    balanceUsd: balanceUsd.toFixed(2),
-                    safeUsd: safeValueUsd.toFixed(2),
-                    safeAmount: safeAmountRounded,
-                    tokenPrice: tokenPrice
-                });
+
+        // Use unified MaxCalculator
+        const result = await MaxCalculator.calculate({
+            operation: 'send',
+            tokenType: isNative ? 'native' : 'erc20',
+            fromNetwork: currentNetwork,
+            nativeBalance: isNative ? balance : nativeBalance,
+            tokenBalance: isNative ? undefined : balance,
+            userAddress: currentAccount?.address
+            // No spenderAddress for send - direct transfer, no approval needed
+        });
+
+        if (result.success) {
+            const maxAmount = result.maxAmount;
+
+            // Set value based on mode
+            if (isUSDMode && isNative) {
+                const maxAmountUSD = maxAmount * ethPrice;
+                document.getElementById('sendAmount').value = maxAmountUSD.toFixed(2);
             } else {
-                // Balance too small, use full balance
-                document.getElementById('sendAmount').value = balance;
+                document.getElementById('sendAmount').value = maxAmount.toFixed(6);
+            }
+
+            console.log(`[MAX] Send MAX calculated:`, {
+                tokenType: isNative ? 'native' : 'erc20',
+                balance: balance.toFixed(6),
+                gasReserve: result.gasReserve.toFixed(6),
+                maxSend: maxAmount.toFixed(6),
+                mode: isUSDMode ? 'USD' : selectedAsset.symbol
+            });
+
+            // Show warning if ERC20 and insufficient native for gas
+            if (!isNative && !result.validation.sufficient) {
+                const symbol = NETWORKS[currentNetwork]?.symbol || 'ETH';
+                showToast(`Low ${symbol} for gas: need ${result.validation.requiredNative?.toFixed(6) || '?'}, have ${result.validation.availableNative?.toFixed(6) || '?'}`, 'warning');
+            }
+
+            // Start watcher for auto-update (only for native token)
+            if (isNative) {
+                startMaxWatcher('send', 'sendAmount', currentNetwork, balance, 'transfer', 1.2, 'continueBtn');
             }
         } else {
-            // No price available, use full balance (will be validated on submit)
-            document.getElementById('sendAmount').value = balance;
+            console.error('[MAX] Calculation failed:', result.error);
+            showToast(result.error || 'Failed to calculate max amount', 'error');
         }
+    } catch (error) {
+        console.error('Error calculating MAX:', error);
+        showToast('Error calculating max amount', 'error');
+    } finally {
+        hideLoader();
     }
-    
+
     updateSendUSD();
     validateSendForm();
 }
@@ -1774,6 +1985,9 @@ function openModal(modalId) {
         document.getElementById('confirmBridgeBtn').dataset.quoteData = '';
         document.getElementById('confirmBridgeBtn').dataset.fromNetwork = '';
         console.log('[CLEANUP] Cleared previous bridge quote data');
+        
+        // Populate bridge networks dynamically
+        populateBridgeNetworks();
     }
     
     const modal = document.getElementById(modalId);
@@ -1799,7 +2013,16 @@ function closeModal(modalId) {
         stopMaxWatcher('swap');
         stopMaxWatcher('bridge2');
         hideSimulationPreview();
-        
+
+        // Stop quote auto-refresh
+        if (typeof stopQuoteRefresh === 'function') {
+            stopQuoteRefresh();
+        }
+        // Clear MAX mode state
+        if (typeof clearMaxModeState === 'function') {
+            clearMaxModeState();
+        }
+
         // VARIANT A: Clear swap ready state when closing modal
         if (typeof clearSwapReadyState === 'function') {
             clearSwapReadyState();
@@ -2050,45 +2273,276 @@ window.speedUpTx = async function(hash) {
     }
 };
 
-console.log('[Forge] Forge Wallet Ready!');
+console.log('[FortiX] FortiX Wallet Ready!');
 
-// Add token functions
+// Add token functions - cached metadata for auto-fill
+let _tokenMetadataPreview = null;
+
 async function addToken() {
     const address = document.getElementById('tokenAddress').value.trim();
-    const symbol = document.getElementById('tokenSymbol').value.trim().toUpperCase();
-    const decimals = parseInt(document.getElementById('tokenDecimals').value) || 18;
-    
-    if (!address || !symbol) {
-        showToast('Please fill all fields', 'warning');
+    let symbol = document.getElementById('tokenSymbol').value.trim().toUpperCase();
+    let decimals = parseInt(document.getElementById('tokenDecimals').value) || 18;
+    let name = symbol;
+
+    if (!address) {
+        showToast('Please enter token address', 'warning');
         return;
     }
-    
+
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
         showToast('Invalid token address', 'error');
         return;
     }
-    
+
+    // Use metadata from API if symbol not manually entered
+    if (!symbol && _tokenMetadataPreview) {
+        symbol = _tokenMetadataPreview.symbol || '';
+        decimals = _tokenMetadataPreview.decimals || 18;
+        name = _tokenMetadataPreview.name || symbol;
+    }
+
+    // If still no symbol, try fetching
+    if (!symbol) {
+        const metadata = await fetchTokenMetadata(currentNetwork, address);
+        if (metadata && metadata.symbol) {
+            symbol = metadata.symbol;
+            decimals = metadata.decimals || 18;
+            name = metadata.name || symbol;
+        } else {
+            showToast('Could not fetch token info. Please enter symbol manually.', 'warning');
+            return;
+        }
+    }
+
+    // Check for impersonation one more time (in case symbol was entered manually)
+    const impersonation = checkTokenImpersonation(symbol, address);
+    if (impersonation.isImpersonator) {
+        const realAddr = impersonation.realAddress;
+        const confirmed = confirm(
+            `⚠️ WARNING: Possible Scam Token\n\n` +
+            `This token uses symbol "${symbol}" but has a different address than the known ${symbol} token.\n\n` +
+            `This address: ${address.slice(0, 10)}...${address.slice(-8)}\n` +
+            `Real ${symbol}: ${realAddr.slice(0, 10)}...${realAddr.slice(-8)}\n\n` +
+            `This is likely a SCAM. Are you sure you want to add it?`
+        );
+
+        if (!confirmed) {
+            showToast('Token not added', 'info');
+            return;
+        }
+    }
+
     try {
         const response = await chrome.runtime.sendMessage({
             action: 'addToken',
             network: currentNetwork,
-            token: { address, symbol, name: symbol, decimals } // Add name field
+            token: { address, symbol, name, decimals }
         });
-        
+
         if (response.success) {
             closeModal('addTokenModal');
             showToast('Token added successfully!', 'success');
+            // Clear form
             document.getElementById('tokenAddress').value = '';
             document.getElementById('tokenSymbol').value = '';
             document.getElementById('tokenDecimals').value = '18';
-            await loadBalance(); // Reload balance to fetch new token
-            await loadTokens(); // Then reload token list
+            _tokenMetadataPreview = null;
+            clearTokenMetadataPreview();
+            await loadBalance();
+            await loadTokens();
         } else {
             showToast('Error: ' + response.error, 'error');
         }
     } catch (error) {
         console.error('Error adding token:', error);
         showToast('Error adding token', 'error');
+    }
+}
+
+// Setup token address input listener for auto-fetch metadata
+function setupTokenAddressListener() {
+    const addressInput = document.getElementById('tokenAddress');
+    if (!addressInput) return;
+
+    let debounceTimer = null;
+
+    addressInput.addEventListener('input', (e) => {
+        const address = e.target.value.trim();
+
+        // Clear previous timer
+        if (debounceTimer) clearTimeout(debounceTimer);
+
+        // Clear preview if address is invalid
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+            clearTokenMetadataPreview();
+            _tokenMetadataPreview = null;
+            return;
+        }
+
+        // Debounce API call
+        debounceTimer = setTimeout(async () => {
+            await fetchAndShowTokenMetadata(address);
+        }, 500);
+    });
+}
+
+// Check if token is impersonating a known token (same symbol, different address)
+let _isImpersonatorToken = false;
+let _impersonatorRealAddress = null;
+
+function checkTokenImpersonation(symbol, address) {
+    const swapTokens = typeof getTokensSync === 'function'
+        ? getTokensSync(currentNetwork)
+        : (SWAP_TOKENS?.[currentNetwork] || {});
+
+    const symbolUpper = (symbol || '').toUpperCase();
+    const knownAddress = swapTokens[symbolUpper] || swapTokens[symbol];
+
+    if (knownAddress &&
+        knownAddress !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' &&
+        knownAddress.toLowerCase() !== address.toLowerCase()) {
+        return { isImpersonator: true, realAddress: knownAddress };
+    }
+
+    return { isImpersonator: false, realAddress: null };
+}
+
+// Fetch and display token metadata preview
+async function fetchAndShowTokenMetadata(address) {
+    const previewContainer = document.getElementById('tokenMetadataPreview');
+
+    // Reset impersonator state
+    _isImpersonatorToken = false;
+    _impersonatorRealAddress = null;
+
+    // Show loading state
+    if (previewContainer) {
+        previewContainer.innerHTML = '<div style="text-align: center; padding: 8px; color: var(--text-muted);">Loading...</div>';
+        previewContainer.style.display = 'block';
+    }
+
+    try {
+        const metadata = await fetchTokenMetadata(currentNetwork, address);
+        _tokenMetadataPreview = metadata;
+
+        if (metadata && metadata.symbol) {
+            // Check for impersonation
+            const impersonation = checkTokenImpersonation(metadata.symbol, address);
+            _isImpersonatorToken = impersonation.isImpersonator;
+            _impersonatorRealAddress = impersonation.realAddress;
+
+            // Auto-fill fields if empty
+            const symbolInput = document.getElementById('tokenSymbol');
+            const decimalsInput = document.getElementById('tokenDecimals');
+
+            if (symbolInput && !symbolInput.value) {
+                symbolInput.value = metadata.symbol;
+            }
+            if (decimalsInput && decimalsInput.value === '18') {
+                decimalsInput.value = metadata.decimals || 18;
+            }
+
+            // Show preview with trust level
+            const trust = typeof getTokenTrustLevel === 'function'
+                ? getTokenTrustLevel(metadata)
+                : { level: 'unknown', color: '#888', description: 'Unknown' };
+
+            const trustIcon = trust.level === 'verified' ? '✓' :
+                              trust.level === 'popular' ? '★' :
+                              trust.level === 'unverified' ? '⚠' : '•';
+
+            // Build preview HTML
+            let previewHTML = `
+                <div class="token-metadata-row">
+                    <span class="token-metadata-label">Name</span>
+                    <span class="token-metadata-value">${metadata.name || metadata.symbol}</span>
+                </div>
+                <div class="token-metadata-row">
+                    <span class="token-metadata-label">Symbol</span>
+                    <span class="token-metadata-value">${metadata.symbol}</span>
+                </div>
+                <div class="token-metadata-row">
+                    <span class="token-metadata-label">Decimals</span>
+                    <span class="token-metadata-value">${metadata.decimals || 18}</span>
+                </div>
+                <div class="token-metadata-row">
+                    <span class="token-metadata-label">Status</span>
+                    <span class="token-metadata-value" style="color: ${trust.color}">${trustIcon} ${trust.description}</span>
+                </div>
+            `;
+
+            // Add impersonator warning
+            if (_isImpersonatorToken) {
+                previewHTML += `
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px;">
+                        <div style="color: #ef4444; font-weight: 600; margin-bottom: 4px;">
+                            ⚠️ WARNING: Possible Impersonator
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 11px;">
+                            This token uses symbol "${metadata.symbol}" but has a different address than the known ${metadata.symbol} token.
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 10px; margin-top: 4px;">
+                            Real ${metadata.symbol}: ${_impersonatorRealAddress?.slice(0, 10)}...${_impersonatorRealAddress?.slice(-8)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (previewContainer) {
+                previewContainer.innerHTML = previewHTML;
+                previewContainer.style.display = 'block';
+            }
+        } else {
+            // Token not found in backend - also check impersonation by symbol input
+            const symbolInput = document.getElementById('tokenSymbol');
+            const enteredSymbol = symbolInput?.value?.trim()?.toUpperCase();
+
+            if (enteredSymbol) {
+                const impersonation = checkTokenImpersonation(enteredSymbol, address);
+                _isImpersonatorToken = impersonation.isImpersonator;
+                _impersonatorRealAddress = impersonation.realAddress;
+            }
+
+            let warningHTML = `
+                <div style="text-align: center; padding: 8px; color: var(--text-muted);">
+                    <span style="color: #f59e0b">⚠</span> Token not in database. Please enter details manually.
+                </div>
+            `;
+
+            if (_isImpersonatorToken) {
+                warningHTML += `
+                    <div style="margin-top: 8px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px;">
+                        <div style="color: #ef4444; font-weight: 600; font-size: 12px;">
+                            ⚠️ This may be impersonating ${enteredSymbol}
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (previewContainer) {
+                previewContainer.innerHTML = warningHTML;
+                previewContainer.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.warn('[TokenMetadata] Failed to fetch:', error.message);
+        if (previewContainer) {
+            previewContainer.innerHTML = `
+                <div style="text-align: center; padding: 8px; color: var(--text-muted);">
+                    Could not verify token. Enter details manually.
+                </div>
+            `;
+            previewContainer.style.display = 'block';
+        }
+    }
+}
+
+// Clear token metadata preview
+function clearTokenMetadataPreview() {
+    const previewContainer = document.getElementById('tokenMetadataPreview');
+    if (previewContainer) {
+        previewContainer.innerHTML = '';
+        previewContainer.style.display = 'none';
     }
 }
 
@@ -2147,6 +2601,8 @@ function loadPopularTokens(searchQuery = '') {
             // Use Trust Wallet Assets for token icon
             const tokenIcon = getTokenIcon(token.symbol, token.address, currentNetwork);
             const initials = token.symbol.slice(0, 2).toUpperCase();
+            // Popular tokens from SWAP_TOKENS/POPULAR_TOKENS get verified badge
+            const badgeHTML = '<span class="token-badge token-badge-verified" title="Verified">✓</span>';
             return `
                 <div class="token-item" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
                     <div class="token-info" style="flex: 1;">
@@ -2155,12 +2611,12 @@ function loadPopularTokens(searchQuery = '') {
                             ${initials}
                         </div>
                         <div class="token-details">
-                            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${token.symbol}</h4>
+                            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${token.symbol}${badgeHTML}</h4>
                             <div style="font-size: 11px; color: var(--text-muted);">${token.name}</div>
                         </div>
                     </div>
-                    <button 
-                        class="btn ${isAdded ? 'btn-secondary' : 'btn-primary'}" 
+                    <button
+                        class="btn ${isAdded ? 'btn-secondary' : 'btn-primary'}"
                         data-token='${JSON.stringify(token)}'
                         ${isAdded ? 'disabled' : ''}
                         style="padding: 6px 16px; font-size: 12px;">

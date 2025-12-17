@@ -1,4 +1,4 @@
-// Forge Wallet - Background Service Worker
+// FortiX Wallet - Background Service Worker
 
 // Production mode - disable verbose logging
 const PRODUCTION_MODE = false;
@@ -15,233 +15,128 @@ if (PRODUCTION_MODE) {
 importScripts('../libs/ethers.min.js');
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NETWORKS CONFIGURATION (37 mainnet chains)
-// Version: 2.0.0 | Last updated: 2025-12-13
-// NOTE: All RPC calls should go through backend for production
-// These public RPCs are fallbacks only
+// NETWORKS CONFIGURATION - Dynamic via backend + chrome.storage
+// Version: 4.0.0 | Last updated: 2025-12-16
+// RPC URLs fetched from backend, NO hardcoded RPCs
+// All RPC calls go through backend proxy
 // ═══════════════════════════════════════════════════════════════════════════════
-const NETWORKS = {
-    // TIER 1: Ethereum & Major L2s
-    '1': { 
-        rpc: 'https://eth.llamarpc.com',
-        fallbackRpcs: ['https://ethereum.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.drpc.org'],
-        chainId: 1, name: 'Ethereum', symbol: 'ETH', explorer: 'https://etherscan.io'
-    },
-    '8453': { 
-        rpc: 'https://mainnet.base.org',
-        fallbackRpcs: ['https://base.llamarpc.com', 'https://base.publicnode.com', 'https://base.drpc.org'],
-        chainId: 8453, name: 'Base', symbol: 'ETH', explorer: 'https://basescan.org'
-    },
-    '42161': { 
-        rpc: 'https://arbitrum.llamarpc.com',
-        fallbackRpcs: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum.publicnode.com', 'https://arbitrum.drpc.org'],
-        chainId: 42161, name: 'Arbitrum One', symbol: 'ETH', explorer: 'https://arbiscan.io'
-    },
-    '10': { 
-        rpc: 'https://optimism.llamarpc.com',
-        fallbackRpcs: ['https://mainnet.optimism.io', 'https://optimism.publicnode.com', 'https://optimism.drpc.org'],
-        chainId: 10, name: 'Optimism', symbol: 'ETH', explorer: 'https://optimistic.etherscan.io'
-    },
-    '137': { 
-        rpc: 'https://polygon.llamarpc.com',
-        fallbackRpcs: ['https://polygon-rpc.com', 'https://polygon.publicnode.com', 'https://polygon.drpc.org'],
-        chainId: 137, name: 'Polygon', symbol: 'POL', explorer: 'https://polygonscan.com'
-    },
-    '56': { 
-        rpc: 'https://bsc-dataseed1.binance.org',
-        fallbackRpcs: ['https://bsc-dataseed2.binance.org', 'https://bsc.publicnode.com', 'https://bsc.drpc.org'],
-        chainId: 56, name: 'BNB Chain', symbol: 'BNB', explorer: 'https://bscscan.com'
-    },
-    '43114': { 
-        rpc: 'https://avalanche-c-chain.publicnode.com',
-        fallbackRpcs: ['https://api.avax.network/ext/bc/C/rpc', 'https://rpc.ankr.com/avalanche', 'https://avalanche.drpc.org'],
-        chainId: 43114, name: 'Avalanche', symbol: 'AVAX', explorer: 'https://snowtrace.io'
-    },
-    // ZK Rollups
-    '324': { 
-        rpc: 'https://mainnet.era.zksync.io',
-        fallbackRpcs: ['https://zksync.drpc.org', 'https://zksync-era.blockpi.network/v1/rpc/public'],
-        chainId: 324, name: 'zkSync Era', symbol: 'ETH', explorer: 'https://explorer.zksync.io'
-    },
-    '534352': { 
-        rpc: 'https://rpc.scroll.io',
-        fallbackRpcs: ['https://scroll.drpc.org', 'https://scroll-mainnet.public.blastapi.io'],
-        chainId: 534352, name: 'Scroll', symbol: 'ETH', explorer: 'https://scrollscan.com'
-    },
-    '59144': { 
-        rpc: 'https://rpc.linea.build',
-        fallbackRpcs: ['https://linea.drpc.org', 'https://linea-mainnet.public.blastapi.io'],
-        chainId: 59144, name: 'Linea', symbol: 'ETH', explorer: 'https://lineascan.build'
-    },
-    '1101': { 
-        rpc: 'https://zkevm-rpc.com',
-        fallbackRpcs: ['https://polygon-zkevm.drpc.org', 'https://rpc.polygon-zkevm.gateway.fm'],
-        chainId: 1101, name: 'Polygon zkEVM', symbol: 'ETH', explorer: 'https://zkevm.polygonscan.com'
-    },
-    // L2 & Rollups
-    '81457': { 
-        rpc: 'https://rpc.blast.io',
-        fallbackRpcs: ['https://blast.drpc.org', 'https://blast-mainnet.public.blastapi.io'],
-        chainId: 81457, name: 'Blast', symbol: 'ETH', explorer: 'https://blastscan.io'
-    },
-    '5000': { 
-        rpc: 'https://rpc.mantle.xyz',
-        fallbackRpcs: ['https://mantle.drpc.org', 'https://mantle-mainnet.public.blastapi.io'],
-        chainId: 5000, name: 'Mantle', symbol: 'MNT', explorer: 'https://mantlescan.xyz'
-    },
-    '42170': { 
-        rpc: 'https://nova.arbitrum.io/rpc',
-        fallbackRpcs: ['https://arbitrum-nova.drpc.org', 'https://arbitrum-nova.public.blastapi.io'],
-        chainId: 42170, name: 'Arbitrum Nova', symbol: 'ETH', explorer: 'https://nova.arbiscan.io'
-    },
-    '167000': { 
-        rpc: 'https://rpc.mainnet.taiko.xyz',
-        fallbackRpcs: ['https://taiko.drpc.org', 'https://rpc.taiko.tools'],
-        chainId: 167000, name: 'Taiko', symbol: 'ETH', explorer: 'https://taikoscan.io'
-    },
-    // Alt L1s
-    '250': { 
-        rpc: 'https://rpc.ftm.tools',
-        fallbackRpcs: ['https://fantom.publicnode.com', 'https://fantom.drpc.org', 'https://rpcapi.fantom.network'],
-        chainId: 250, name: 'Fantom', symbol: 'FTM', explorer: 'https://ftmscan.com'
-    },
-    '100': { 
-        rpc: 'https://rpc.gnosischain.com',
-        fallbackRpcs: ['https://gnosis.drpc.org', 'https://gnosis.publicnode.com'],
-        chainId: 100, name: 'Gnosis', symbol: 'xDAI', explorer: 'https://gnosisscan.io'
-    },
-    '42220': { 
-        rpc: 'https://forno.celo.org',
-        fallbackRpcs: ['https://celo.drpc.org', 'https://rpc.ankr.com/celo'],
-        chainId: 42220, name: 'Celo', symbol: 'CELO', explorer: 'https://celoscan.io'
-    },
-    '1329': { 
-        rpc: 'https://evm-rpc.sei-apis.com',
-        fallbackRpcs: ['https://sei.drpc.org', 'https://evm-rpc.sei.io'],
-        chainId: 1329, name: 'Sei', symbol: 'SEI', explorer: 'https://seitrace.com'
-    },
-    '50': { 
-        rpc: 'https://rpc.xinfin.network',
-        fallbackRpcs: ['https://erpc.xinfin.network', 'https://rpc1.xinfin.network'],
-        chainId: 50, name: 'XDC Network', symbol: 'XDC', explorer: 'https://xdcscan.io'
-    },
-    // Gaming & NFT
-    '1284': { 
-        rpc: 'https://rpc.api.moonbeam.network',
-        fallbackRpcs: ['https://moonbeam.drpc.org', 'https://moonbeam.publicnode.com'],
-        chainId: 1284, name: 'Moonbeam', symbol: 'GLMR', explorer: 'https://moonscan.io'
-    },
-    '1285': { 
-        rpc: 'https://rpc.api.moonriver.moonbeam.network',
-        fallbackRpcs: ['https://moonriver.drpc.org', 'https://moonriver.publicnode.com'],
-        chainId: 1285, name: 'Moonriver', symbol: 'MOVR', explorer: 'https://moonriver.moonscan.io'
-    },
-    '7777777': { 
-        rpc: 'https://rpc.zora.energy',
-        fallbackRpcs: ['https://zora.drpc.org'],
-        chainId: 7777777, name: 'Zora', symbol: 'ETH', explorer: 'https://explorer.zora.energy'
-    },
-    '33139': { 
-        rpc: 'https://rpc.apechain.com/http',
-        fallbackRpcs: ['https://apechain.drpc.org'],
-        chainId: 33139, name: 'ApeChain', symbol: 'APE', explorer: 'https://apescan.io'
-    },
-    '747474': { 
-        rpc: 'https://ronin.lgns.net/rpc',
-        fallbackRpcs: ['https://api.roninchain.com/rpc'],
-        chainId: 747474, name: 'Katana', symbol: 'RON', explorer: 'https://app.roninchain.com'
-    },
-    // BNB Ecosystem
-    '204': { 
-        rpc: 'https://opbnb-mainnet-rpc.bnbchain.org',
-        fallbackRpcs: ['https://opbnb.drpc.org', 'https://opbnb-mainnet.public.blastapi.io'],
-        chainId: 204, name: 'opBNB', symbol: 'BNB', explorer: 'https://opbnbscan.com'
-    },
-    // Emerging Chains
-    '80094': { 
-        rpc: 'https://rpc.berachain.com',
-        fallbackRpcs: ['https://berachain.drpc.org'],
-        chainId: 80094, name: 'Berachain', symbol: 'BERA', explorer: 'https://berascan.io'
-    },
-    '146': { 
-        rpc: 'https://rpc.soniclabs.com',
-        fallbackRpcs: ['https://sonic.drpc.org'],
-        chainId: 146, name: 'Sonic', symbol: 'S', explorer: 'https://sonicscan.org'
-    },
-    '999': { 
-        rpc: 'https://rpc.hyperliquid.xyz/evm',
-        fallbackRpcs: [],
-        chainId: 999, name: 'HyperEVM', symbol: 'HYPE', explorer: 'https://explorer.hyperliquid.xyz'
-    },
-    '480': { 
-        rpc: 'https://worldchain-mainnet.g.alchemy.com/public',
-        fallbackRpcs: ['https://worldchain.drpc.org'],
-        chainId: 480, name: 'World Chain', symbol: 'ETH', explorer: 'https://worldscan.org'
-    },
-    '1923': { 
-        rpc: 'https://swell-mainnet.alt.technology',
-        fallbackRpcs: ['https://rpc.swellnetwork.io'],
-        chainId: 1923, name: 'Swell Chain', symbol: 'ETH', explorer: 'https://explorer.swellnetwork.io'
-    },
-    '2741': { 
-        rpc: 'https://api.mainnet.abs.xyz',
-        fallbackRpcs: ['https://abstract.drpc.org'],
-        chainId: 2741, name: 'Abstract', symbol: 'ETH', explorer: 'https://abscan.org'
-    },
-    '252': { 
-        rpc: 'https://rpc.frax.com',
-        fallbackRpcs: ['https://fraxtal.drpc.org'],
-        chainId: 252, name: 'Fraxtal', symbol: 'frxETH', explorer: 'https://fraxscan.com'
-    },
-    '199': { 
-        rpc: 'https://rpc.bittorrentchain.io',
-        fallbackRpcs: ['https://bittorrent.drpc.org'],
-        chainId: 199, name: 'BitTorrent Chain', symbol: 'BTT', explorer: 'https://bttcscan.com'
-    },
-    '130': { 
-        rpc: 'https://mainnet.unichain.org',
-        fallbackRpcs: ['https://unichain.drpc.org'],
-        chainId: 130, name: 'Unichain', symbol: 'ETH', explorer: 'https://uniscan.xyz'
-    },
-    '143': { 
-        rpc: 'https://rpc.monad.xyz',
-        fallbackRpcs: [],
-        chainId: 143, name: 'Monad', symbol: 'MON', explorer: 'https://explorer.monad.xyz'
-    },
-    '988': { 
-        rpc: 'https://rpc.stablechain.io',
-        fallbackRpcs: [],
-        chainId: 988, name: 'Stable Chain', symbol: 'ETH', explorer: 'https://explorer.stablechain.io'
-    },
-    // ═══════════════════════════════════════════════════════════════════════════════
+
+// Network metadata only (no RPC URLs - fetched from backend)
+// RPC URLs are loaded via loadNetworkRpcsFromBackend()
+let NETWORKS = {
+    // TIER 1: Top 7 EVM Networks
+    '1': { chainId: 1, name: 'Ethereum', symbol: 'ETH', explorer: 'https://etherscan.io', rpc: '', fallbackRpcs: [] },
+    '56': { chainId: 56, name: 'BNB Chain', symbol: 'BNB', explorer: 'https://bscscan.com', rpc: '', fallbackRpcs: [] },
+    '137': { chainId: 137, name: 'Polygon', symbol: 'POL', explorer: 'https://polygonscan.com', rpc: '', fallbackRpcs: [] },
+    '42161': { chainId: 42161, name: 'Arbitrum One', symbol: 'ETH', explorer: 'https://arbiscan.io', rpc: '', fallbackRpcs: [] },
+    '10': { chainId: 10, name: 'Optimism', symbol: 'ETH', explorer: 'https://optimistic.etherscan.io', rpc: '', fallbackRpcs: [] },
+    '8453': { chainId: 8453, name: 'Base', symbol: 'ETH', explorer: 'https://basescan.org', rpc: '', fallbackRpcs: [] },
+    '43114': { chainId: 43114, name: 'Avalanche', symbol: 'AVAX', explorer: 'https://snowtrace.io', rpc: '', fallbackRpcs: [] },
     // TESTNETS
-    // ═══════════════════════════════════════════════════════════════════════════════
-    '11155111': { 
-        rpc: 'https://rpc.sepolia.org',
-        fallbackRpcs: ['https://sepolia.drpc.org', 'https://ethereum-sepolia.publicnode.com'],
-        chainId: 11155111, name: 'Sepolia', symbol: 'ETH', explorer: 'https://sepolia.etherscan.io', testnet: true
-    },
-    '80002': { 
-        rpc: 'https://rpc-amoy.polygon.technology',
-        fallbackRpcs: ['https://polygon-amoy.drpc.org'],
-        chainId: 80002, name: 'Polygon Amoy', symbol: 'POL', explorer: 'https://amoy.polygonscan.com', testnet: true
-    },
-    '421614': { 
-        rpc: 'https://sepolia-rollup.arbitrum.io/rpc',
-        fallbackRpcs: ['https://arbitrum-sepolia.drpc.org'],
-        chainId: 421614, name: 'Arbitrum Sepolia', symbol: 'ETH', explorer: 'https://sepolia.arbiscan.io', testnet: true
-    },
-    '11155420': { 
-        rpc: 'https://sepolia.optimism.io',
-        fallbackRpcs: ['https://optimism-sepolia.drpc.org'],
-        chainId: 11155420, name: 'Optimism Sepolia', symbol: 'ETH', explorer: 'https://sepolia-optimism.etherscan.io', testnet: true
-    },
-    '84532': { 
-        rpc: 'https://sepolia.base.org',
-        fallbackRpcs: ['https://base-sepolia.drpc.org'],
-        chainId: 84532, name: 'Base Sepolia', symbol: 'ETH', explorer: 'https://sepolia.basescan.org', testnet: true
-    }
+    '11155111': { chainId: 11155111, name: 'Sepolia', symbol: 'ETH', explorer: 'https://sepolia.etherscan.io', testnet: true, rpc: '', fallbackRpcs: [] },
+    '80002': { chainId: 80002, name: 'Polygon Amoy', symbol: 'POL', explorer: 'https://amoy.polygonscan.com', testnet: true, rpc: '', fallbackRpcs: [] },
+    '421614': { chainId: 421614, name: 'Arbitrum Sepolia', symbol: 'ETH', explorer: 'https://sepolia.arbiscan.io', testnet: true, rpc: '', fallbackRpcs: [] },
+    '11155420': { chainId: 11155420, name: 'Optimism Sepolia', symbol: 'ETH', explorer: 'https://sepolia-optimism.etherscan.io', testnet: true, rpc: '', fallbackRpcs: [] },
+    '84532': { chainId: 84532, name: 'Base Sepolia', symbol: 'ETH', explorer: 'https://sepolia.basescan.org', testnet: true, rpc: '', fallbackRpcs: [] }
 };
+
+// Cache for RPC URLs fetched from backend
+let cachedRpcUrls = {};
+const RPC_CACHE_KEY = 'cachedNetworkRpcUrls';
+const RPC_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Load RPC URLs from backend for all networks
+ * Caches them for 24h
+ */
+async function loadNetworkRpcsFromBackend() {
+    try {
+        // Check cache first
+        const result = await chrome.storage.local.get([RPC_CACHE_KEY, 'rpcUrlsCacheTimestamp']);
+        const cached = result[RPC_CACHE_KEY];
+        const timestamp = result.rpcUrlsCacheTimestamp;
+
+        if (cached && timestamp && (Date.now() - timestamp) < RPC_CACHE_TTL) {
+            cachedRpcUrls = cached;
+            // Apply cached RPCs to NETWORKS
+            for (const [chainId, rpcUrl] of Object.entries(cachedRpcUrls)) {
+                if (NETWORKS[chainId]) {
+                    NETWORKS[chainId].rpc = rpcUrl;
+                }
+            }
+            console.log('[SW] Using cached RPC URLs for', Object.keys(cachedRpcUrls).length, 'networks');
+            return;
+        }
+
+        console.log('[SW] Fetching RPC URLs from backend...');
+        const FORTIX_API_BASE = 'https://api.fortixwallet.com';
+
+        // Fetch RPC for each network
+        for (const chainId of Object.keys(NETWORKS)) {
+            try {
+                const response = await fetch(`${FORTIX_API_BASE}/api/v1/networks/${chainId}`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data?.rpcUrl) {
+                        cachedRpcUrls[chainId] = data.data.rpcUrl;
+                        NETWORKS[chainId].rpc = data.data.rpcUrl;
+                    }
+                }
+            } catch (error) {
+                // Individual network fetch failed, continue
+            }
+        }
+
+        // Cache the RPC URLs
+        await chrome.storage.local.set({
+            [RPC_CACHE_KEY]: cachedRpcUrls,
+            rpcUrlsCacheTimestamp: Date.now()
+        });
+
+        console.log('[SW] Cached RPC URLs for', Object.keys(cachedRpcUrls).length, 'networks');
+    } catch (error) {
+        console.warn('[SW] Failed to load RPC URLs from backend:', error.message);
+    }
+}
+
+// Load user networks from chrome.storage
+async function loadUserNetworksForServiceWorker() {
+    try {
+        const result = await chrome.storage.local.get('userNetworks');
+        const userNetworks = result.userNetworks || [];
+        
+        for (const net of userNetworks) {
+            NETWORKS[String(net.chainId)] = {
+                rpc: net.rpc || '',
+                fallbackRpcs: net.fallbackRpcs || [],
+                chainId: net.chainId,
+                name: net.name,
+                symbol: net.symbol,
+                explorer: net.explorer || ''
+            };
+        }
+        
+        console.log('[SW] Loaded user networks. Total:', Object.keys(NETWORKS).length);
+    } catch (error) {
+        console.error('[SW] Failed to load user networks:', error);
+    }
+}
+
+// Listen for network changes from popup
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.userNetworks) {
+        console.log('[SW] User networks changed, reloading...');
+        loadUserNetworksForServiceWorker();
+    }
+});
+
+// Load user networks and RPC URLs on service worker start
+loadUserNetworksForServiceWorker();
+loadNetworkRpcsFromBackend();
 
 // Etherscan API - ALL CALLS GO THROUGH BACKEND
 // No API keys in frontend code!
@@ -621,21 +516,48 @@ async function getBackendTransactionHistory(chainId, address, options = {}) {
  * @returns {Promise<any>} Result from RPC call
  */
 async function callBackendRpc(chainId, method, params = []) {
+    const requestBody = {
+        chainId: parseInt(chainId),
+        method,
+        params
+    };
+
+    // Log request for debugging
+    if (method === 'eth_sendRawTransaction') {
+        console.log('[RPC] Sending eth_sendRawTransaction:', {
+            chainId: requestBody.chainId,
+            method: requestBody.method,
+            paramsLength: params.length,
+            txHexPreview: params[0]?.substring(0, 50) + '...'
+        });
+    }
+
     const response = await fetch(RPC_BACKEND_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chainId: parseInt(chainId),
-            method,
-            params
-        })
+        body: JSON.stringify(requestBody)
     });
-    
+
+    // Always try to read response body for error details
+    const responseData = await response.json().catch(() => null);
+
     if (!response.ok) {
-        throw new Error(`Backend RPC returned ${response.status}`);
+        // Extract error message from response body if available
+        let errorDetail = '';
+        if (responseData?.error) {
+            if (typeof responseData.error === 'object') {
+                errorDetail = responseData.error.message || JSON.stringify(responseData.error);
+            } else {
+                errorDetail = String(responseData.error);
+            }
+        }
+        console.error('[RPC] Backend error:', { status: response.status, error: errorDetail, responseData });
+        throw new Error(`Backend RPC ${response.status}: ${errorDetail || 'Unknown error'}`);
     }
-    
-    const responseData = await response.json();
+
+    if (!responseData) {
+        throw new Error('Backend RPC returned empty response');
+    }
     
     if (!responseData.success) {
         // Error can be string or object {code, message}
@@ -707,86 +629,59 @@ async function getGasPricesWithFallback(chainId, provider, preference = 'medium'
     } catch (error) {
         console.warn('[GAS] Backend gas API failed, falling back to provider:', error.message);
         
-        // Fallback to provider.getFeeData()
-        const feeData = await provider.getFeeData();
-        console.log('[GAS] Got prices from provider fallback:', {
-            source: 'provider',
-            gasPrice: feeData.gasPrice?.toString(),
-            maxFeePerGas: feeData.maxFeePerGas?.toString(),
-            maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
+        // Fallback to RPC via fetchWithFallback if provider not available
+        if (provider) {
+            const feeData = await provider.getFeeData();
+            console.log('[GAS] Got prices from provider fallback:', {
+                source: 'provider',
+                gasPrice: feeData.gasPrice?.toString(),
+                maxFeePerGas: feeData.maxFeePerGas?.toString(),
+                maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString()
+            });
+            return feeData;
+        }
+
+        // Last fallback: use RPC proxy via fetchWithFallback
+        console.log('[GAS] No provider, trying RPC proxy...');
+        const gasPriceData = await fetchWithFallback(chainId, 'eth_gasPrice', []);
+        const gasPrice = gasPriceData.result ? BigInt(gasPriceData.result) : 50000000000n; // 50 gwei default
+
+        console.log('[GAS] Got gas price from RPC proxy:', {
+            source: 'rpc_proxy',
+            gasPrice: gasPrice.toString()
         });
-        
-        return feeData;
+
+        return {
+            gasPrice: gasPrice,
+            maxFeePerGas: gasPrice * 2n,
+            maxPriorityFeePerGas: gasPrice / 10n
+        };
     }
 }
 
-// Fetch with fallback RPC support - backend first
+// Fetch with backend RPC proxy - no direct RPC fallback
+// All RPC calls go through backend which has proper Alchemy/Infura keys
 async function fetchWithFallback(network, method, params) {
     const networkConfig = NETWORKS[network];
-    
+
     if (!networkConfig) {
         console.error(`[ERROR] Network ${network} not found in NETWORKS config`);
         throw new Error(`Network ${network} not configured`);
     }
-    
+
     console.log(`🔗 fetchWithFallback: network=${network}, method=${method}`);
-    
-    // 1. Try backend RPC first (has Alchemy + fallback)
+
+    // Use backend RPC proxy exclusively (has Alchemy + proper fallbacks)
+    // No direct RPC fallback - those URLs may be invalid (missing API keys)
     try {
-        console.log(`   Trying backend RPC...`);
+        console.log(`   Calling backend RPC proxy...`);
         const result = await callBackendRpc(network, method, params);
-        console.log(`   [OK] Success from backend, result type: ${typeof result}`);
+        console.log(`   [OK] Success from backend`);
         return { result };
     } catch (backendError) {
-        console.warn(`   [WARN] Backend RPC failed:`, backendError.message);
+        console.error(`[ERROR] Backend RPC failed for ${method} on network ${network}:`, backendError.message);
+        throw new Error(`RPC call failed: ${backendError.message}`);
     }
-    
-    // 2. Fallback to direct RPCs
-    const rpcs = [networkConfig.rpc, ...(networkConfig.fallbackRpcs || [])];
-    console.log(`   Falling back to direct RPCs:`, rpcs.length);
-    
-    let lastError = null;
-    
-    for (let i = 0; i < rpcs.length; i++) {
-        const rpc = rpcs[i];
-        try {
-            console.log(`   Trying RPC ${i + 1}/${rpcs.length}: ${rpc.substring(0, 50)}...`);
-            
-            const response = await fetch(rpc, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: method,
-                    params: params,
-                    id: 1
-                })
-            });
-            
-            // Check for HTTP errors (like Cloudflare blocks)
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            // If we got a valid response, return it
-            if (data.result !== undefined || data.error) {
-                console.log(`   [OK] Success from direct RPC`);
-                return data;
-            }
-            
-            throw new Error('Invalid RPC response');
-        } catch (error) {
-            console.warn(`   [ERROR] RPC failed:`, error.message);
-            lastError = error;
-            // Continue to next RPC
-        }
-    }
-    
-    // All RPCs failed
-    console.error(`[ERROR] All RPCs failed for network ${network}`);
-    throw lastError || new Error('All RPC endpoints failed');
 }
 
 // ============================================================
@@ -1473,7 +1368,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 case 'getGasPrice':
                     response = await getGasPrice(request.network);
                     break;
-                    
+
+                case 'ethCall':
+                    // Generic eth_call through backend RPC proxy
+                    // Used for allowance checks, balance queries, etc.
+                    response = await handleEthCall(request.network, request.to, request.data);
+                    break;
+
                 case 'estimateMaxGas':
                     response = await estimateMaxGas(request.network);
                     break;
@@ -2058,24 +1959,43 @@ async function estimateGas(transaction, requestNetwork) {
             } else {
                 // Has code (contract), estimate gas
                 console.log('[LOG] Contract detected, estimating gas...');
-                
-                const gasLimitData = await fetchWithFallback(network, 'eth_estimateGas', [transaction]);
-                
-                if (gasLimitData.error) {
-                    throw new Error(gasLimitData.error.message || 'Failed to estimate gas');
+
+                try {
+                    const gasLimitData = await fetchWithFallback(network, 'eth_estimateGas', [transaction]);
+
+                    if (gasLimitData.error) {
+                        // Check for insufficient funds error
+                        const errMsg = gasLimitData.error.message || '';
+                        if (errMsg.includes('insufficient funds') || errMsg.includes('INSUFFICIENT_FUNDS')) {
+                            console.warn('[WARN] Insufficient funds for gas estimation, using default for contract call');
+                            // Use reasonable default for bridge/swap contract calls
+                            gasLimit = 300000;
+                        } else {
+                            throw new Error(gasLimitData.error.message || 'Failed to estimate gas');
+                        }
+                    } else {
+                        const estimatedGas = parseInt(gasLimitData.result, 16);
+
+                        // Add 20% buffer (MetaMask style)
+                        const bufferedGas = Math.floor(estimatedGas * 1.2);
+
+                        // Cap at 90% of block gas limit
+                        const maxGas = Math.floor(blockGasLimit * 0.9);
+
+                        gasLimit = Math.min(bufferedGas, maxGas);
+
+                        console.log(`   Estimated: ${estimatedGas}, Buffered (+20%): ${bufferedGas}, Final: ${gasLimit}`);
+                    }
+                } catch (estimateError) {
+                    // Handle insufficient funds error during estimation
+                    const errMsg = estimateError.message || '';
+                    if (errMsg.includes('insufficient funds') || errMsg.includes('INSUFFICIENT_FUNDS')) {
+                        console.warn('[WARN] Insufficient funds for gas estimation, using default for contract call');
+                        gasLimit = 300000;
+                    } else {
+                        throw estimateError;
+                    }
                 }
-                
-                const estimatedGas = parseInt(gasLimitData.result, 16);
-                
-                // Add 20% buffer (MetaMask style)
-                const bufferedGas = Math.floor(estimatedGas * 1.2);
-                
-                // Cap at 90% of block gas limit
-                const maxGas = Math.floor(blockGasLimit * 0.9);
-                
-                gasLimit = Math.min(bufferedGas, maxGas);
-                
-                console.log(`   Estimated: ${estimatedGas}, Buffered (+20%): ${bufferedGas}, Final: ${gasLimit}`);
             }
         } else {
             // No recipient (contract creation/deployment)
@@ -2709,15 +2629,14 @@ async function importWallet(password, importData) {
 async function getBalance(address, network) {
     try {
         console.log(`[BALANCE] Getting balance for ${address} on network ${network}`);
-        
+
         const networkConfig = NETWORKS[network];
         if (!networkConfig) {
             console.error(`[ERROR] Network ${network} not configured`);
             return { success: false, error: `Network ${network} not configured`, balance: '0.0' };
         }
-        
-        console.log(`   Using RPC: ${networkConfig.rpc}`);
-        
+
+        // All RPC calls go through backend proxy
         const data = await fetchWithFallback(network, 'eth_getBalance', [address, 'latest']);
         
         if (data.error) {
@@ -3045,7 +2964,7 @@ async function addEthereumChain(chainParams, origin) {
         // We don't support adding custom chains for now
         return { 
             success: false, 
-            error: `Chain ${chainId} is not supported. Forge Wallet supports: Ethereum, Polygon, Arbitrum, Optimism, Base, BNB Chain, Avalanche.`,
+            error: `Chain ${chainId} is not supported. FortiX Wallet supports: Ethereum, Polygon, Arbitrum, Optimism, Base, BNB Chain, Avalanche.`,
             code: 4902
         };
         
@@ -3113,9 +3032,10 @@ async function approveToken(tokenAddress, spenderAddress, amount, network, gasSp
         
         // Get network config
         const networkConfig = NETWORKS[network] || NETWORKS['1'];
-        const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-        const wallet = new ethers.Wallet(privateKey, provider);
-        
+        // Create wallet for signing only (no provider - we use backend RPC proxy)
+        const wallet = new ethers.Wallet(privateKey);
+        const walletAddress = wallet.address;
+
         // ERC20 approve function selector: approve(address,uint256)
         const approveInterface = new ethers.Interface([
             'function approve(address spender, uint256 amount) returns (bool)'
@@ -3123,26 +3043,29 @@ async function approveToken(tokenAddress, spenderAddress, amount, network, gasSp
         
         const data = approveInterface.encodeFunctionData('approve', [spenderAddress, amount]);
         
-        // Get gas estimate - backend first
+        // Get nonce via backend RPC proxy
+        const nonceData = await fetchWithFallback(network, 'eth_getTransactionCount', [walletAddress, 'latest']);
+        if (nonceData.error) {
+            throw new Error(nonceData.error.message || 'Failed to get nonce');
+        }
+        const nonce = parseInt(nonceData.result, 16);
+
+        // Get gas estimate - backend RPC proxy
         let gasEstimate;
         try {
             const gasHex = await callBackendRpc(network, 'eth_estimateGas', [{
-                from: wallet.address,
+                from: walletAddress,
                 to: tokenAddress,
                 data: data
             }]);
             gasEstimate = BigInt(gasHex);
         } catch (backendErr) {
-            console.warn('[GAS] Backend estimateGas failed, using provider:', backendErr.message);
-            gasEstimate = await provider.estimateGas({
-                from: wallet.address,
-                to: tokenAddress,
-                data: data
-            });
+            console.warn('[GAS] Backend estimateGas failed, using default:', backendErr.message);
+            gasEstimate = 100000n; // Default for ERC20 approve
         }
-        
-        // Get fee data - backend first
-        const feeData = await getGasPricesWithFallback(network, provider, gasSpeed === 'slow' ? 'slow' : gasSpeed === 'aggressive' ? 'fast' : 'medium');
+
+        // Get fee data - backend first, RPC proxy fallback
+        const feeData = await getGasPricesWithFallback(network, null, gasSpeed === 'slow' ? 'slow' : gasSpeed === 'aggressive' ? 'fast' : 'medium');
         
         // Apply gas speed multiplier
         let adjustedGasPrice = feeData.gasPrice;
@@ -3160,42 +3083,68 @@ async function approveToken(tokenAddress, spenderAddress, amount, network, gasSp
             to: tokenAddress,
             data: data,
             gasLimit: gasEstimate * 120n / 100n, // 20% buffer
-            chainId: networkConfig.chainId
+            chainId: networkConfig.chainId,
+            nonce: nonce
         };
-        
+
+        // L2 networks need higher gas buffer (gas prices fluctuate rapidly)
+        const L2_NETWORKS = [42161, 10, 8453, 59144, 534352, 324, 1101, 137]; // Arbitrum, Optimism, Base, Linea, Scroll, zkSync, Polygon zkEVM, Polygon
+        const isL2 = L2_NETWORKS.includes(networkConfig.chainId);
+        const gasBuffer = isL2 ? 1.5 : 1.2; // 50% buffer for L2, 20% for mainnet
+
         // Prefer EIP-1559 if available
         if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
             tx.type = 2;
-            tx.maxFeePerGas = BigInt(Math.floor(Number(feeData.maxFeePerGas) * gasMultiplier * 1.2)); // +20% buffer
-            tx.maxPriorityFeePerGas = BigInt(Math.floor(Number(feeData.maxPriorityFeePerGas) * gasMultiplier * 1.2));
+            tx.maxFeePerGas = BigInt(Math.floor(Number(feeData.maxFeePerGas) * gasMultiplier * gasBuffer));
+            tx.maxPriorityFeePerGas = BigInt(Math.floor(Number(feeData.maxPriorityFeePerGas) * gasMultiplier * gasBuffer));
             console.log('[GAS] EIP-1559 approval:', {
                 maxFeePerGas: Number(tx.maxFeePerGas) / 1e9,
-                maxPriorityFeePerGas: Number(tx.maxPriorityFeePerGas) / 1e9
+                maxPriorityFeePerGas: Number(tx.maxPriorityFeePerGas) / 1e9,
+                isL2: isL2,
+                gasBuffer: gasBuffer
             });
         } else {
-            tx.gasPrice = adjustedGasPrice;
+            // Apply gasBuffer to Legacy path as well (Arbitrum converts to EIP-1559 internally)
+            tx.gasPrice = BigInt(Math.floor(Number(adjustedGasPrice) * gasBuffer));
             console.log('[GAS] Legacy approval:', {
-                gasPrice: Number(tx.gasPrice) / 1e9
+                gasPrice: Number(tx.gasPrice) / 1e9,
+                isL2: isL2,
+                gasBuffer: gasBuffer
             });
         }
         
-        // Send transaction
-        const txResponse = await wallet.sendTransaction(tx);
-        
-        console.log('[OK] Approval tx sent:', txResponse.hash);
-        
-        // Poll for receipt instead of tx.wait() (more reliable)
+        // Sign transaction offline
+        const signedTx = await wallet.signTransaction(tx);
+        console.log('[SIGN] Approval transaction signed');
+
+        // Send via backend RPC proxy
+        let txHash;
+        try {
+            const result = await fetchWithFallback(network, 'eth_sendRawTransaction', [signedTx]);
+            if (result.error) {
+                throw new Error(result.error.message || 'Failed to broadcast approval');
+            }
+            txHash = result.result;
+            console.log('[OK] Approval tx sent via RPC proxy:', txHash);
+        } catch (broadcastError) {
+            console.error('[ERROR] Failed to broadcast approval:', broadcastError.message);
+            throw new Error('Failed to broadcast approval: ' + broadcastError.message);
+        }
+
+        // Poll for receipt via backend RPC proxy
         console.log('[WAIT] Waiting for approval confirmation...');
-        
+
         let receipt = null;
         const maxAttempts = 30; // 30 attempts * 2 sec = 60 sec max
-        
+
         for (let i = 0; i < maxAttempts; i++) {
             try {
-                receipt = await provider.getTransactionReceipt(txResponse.hash);
-                if (receipt) {
-                    if (receipt.status === 1) {
-                        console.log('[OK] Approval confirmed in block:', receipt.blockNumber);
+                const receiptData = await fetchWithFallback(network, 'eth_getTransactionReceipt', [txHash]);
+                if (receiptData.result) {
+                    receipt = receiptData.result;
+                    const status = parseInt(receipt.status, 16);
+                    if (status === 1) {
+                        console.log('[OK] Approval confirmed in block:', parseInt(receipt.blockNumber, 16));
                         break;
                     } else {
                         console.error('[ERROR] Approval transaction reverted');
@@ -3205,19 +3154,19 @@ async function approveToken(tokenAddress, spenderAddress, amount, network, gasSp
             } catch (e) {
                 // Ignore errors during polling
             }
-            
+
             // Wait 2 seconds before next check
             await new Promise(resolve => setTimeout(resolve, 2000));
             console.log(`[WAIT] Polling for receipt... attempt ${i + 1}/${maxAttempts}`);
         }
-        
+
         if (!receipt) {
             console.warn('[WARN] Approval receipt not found after 60 seconds, proceeding anyway');
         }
-        
-        return { 
-            success: true, 
-            hash: txResponse.hash,
+
+        return {
+            success: true,
+            hash: txHash,
             message: 'Token approved successfully'
         };
         
@@ -3373,35 +3322,42 @@ async function requestTokenApproval(request) {
         // Generate request ID
         const requestId = Date.now().toString();
         
-        // Estimate gas for approval
+        // Estimate gas for approval via backend
         let gasEstimate = '~$0.50';
         try {
             const networkConfig = NETWORKS[network] || NETWORKS['1'];
-            const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-            
+
             // Get current account
             const storage = await chrome.storage.local.get(['accounts', 'currentAccountIndex']);
             const accounts = storage.accounts || [];
             const currentAccountIndex = storage.currentAccountIndex || 0;
             const activeAccount = accounts[currentAccountIndex] || accounts[0];
-            
+
             if (activeAccount) {
                 // ERC20 approve data
                 const approveInterface = new ethers.Interface([
                     'function approve(address spender, uint256 amount) returns (bool)'
                 ]);
                 const data = approveInterface.encodeFunctionData('approve', [spenderAddress, amount]);
-                
-                const gasEstimateWei = await provider.estimateGas({
-                    from: activeAccount.address,
-                    to: tokenAddress,
-                    data: data
-                });
-                
-                const feeData = await provider.getFeeData();
+
+                // Estimate gas via backend RPC proxy
+                let gasEstimateWei = 100000n; // Default
+                try {
+                    const gasResult = await callBackendRpc(network, 'eth_estimateGas', [{
+                        from: activeAccount.address,
+                        to: tokenAddress,
+                        data: data
+                    }]);
+                    gasEstimateWei = BigInt(gasResult);
+                } catch (e) {
+                    // Use default
+                }
+
+                // Get gas price via backend
+                const feeData = await getGasPricesWithFallback(network, null);
                 const gasCostWei = gasEstimateWei * (feeData.gasPrice || 0n);
                 const gasCostEth = Number(gasCostWei) / 1e18;
-                
+
                 // Get ETH price (rough estimate)
                 const ethPrice = 2000; // TODO: fetch real price
                 gasEstimate = `~$${(gasCostEth * ethPrice).toFixed(2)}`;
@@ -3423,7 +3379,7 @@ async function requestTokenApproval(request) {
                     amount,
                     suggestedAmount,
                     networkId: network,
-                    origin: origin || 'Forge Wallet',
+                    origin: origin || 'FortiX Wallet',
                     aggregator,
                     gasEstimate
                 }
@@ -3587,65 +3543,83 @@ async function sendSwapTransaction(transaction, network, swapMeta = {}) {
         
         // Get network config
         const networkConfig = NETWORKS[network] || NETWORKS['1'];
-        const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-        const wallet = new ethers.Wallet(privateKey, provider);
-        
-        // Get current gas prices (backend with fallback to provider)
-        const feeData = await getGasPricesWithFallback(network, provider);
-        
+        // Create wallet for signing only (no provider - we use backend RPC proxy)
+        const wallet = new ethers.Wallet(privateKey);
+        const walletAddress = wallet.address;
+
+        // Get nonce via backend RPC proxy
+        const nonceData = await fetchWithFallback(network, 'eth_getTransactionCount', [walletAddress, 'latest']);
+        if (nonceData.error) {
+            throw new Error(nonceData.error.message || 'Failed to get nonce');
+        }
+        const nonce = parseInt(nonceData.result, 16);
+
+        // Get current gas prices (backend with RPC proxy fallback)
+        const feeData = await getGasPricesWithFallback(network, null);
+
         // Prepare transaction
         const tx = {
             to: transaction.to,
             data: transaction.data,
             value: transaction.value || '0x0',
-            chainId: transaction.chainId || networkConfig.chainId
+            chainId: transaction.chainId || networkConfig.chainId,
+            nonce: nonce
         };
-        
+
+        // L2 networks need higher gas buffer (gas prices fluctuate rapidly)
+        const L2_NETWORKS = [42161, 10, 8453, 59144, 534352, 324, 1101, 137];
+        const isL2 = L2_NETWORKS.includes(networkConfig.chainId);
+        const gasBufferPercent = isL2 ? 150n : 120n; // 50% for L2, 20% for mainnet
+
         // Add gas settings - prefer EIP-1559 if available
         if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
             tx.type = 2; // EIP-1559
-            
-            // Use max of quote gas and fresh gas, then add 20% buffer
+
+            // Use max of quote gas and fresh gas, then add buffer
             const quoteMaxFee = transaction.maxFeePerGas ? BigInt(transaction.maxFeePerGas) : 0n;
             const freshMaxFee = feeData.maxFeePerGas;
             const baseMaxFee = quoteMaxFee > freshMaxFee ? quoteMaxFee : freshMaxFee;
-            tx.maxFeePerGas = (baseMaxFee * 120n) / 100n; // +20% buffer
-            
+            tx.maxFeePerGas = (baseMaxFee * gasBufferPercent) / 100n;
+
             const quotePriority = transaction.maxPriorityFeePerGas ? BigInt(transaction.maxPriorityFeePerGas) : 0n;
             const freshPriority = feeData.maxPriorityFeePerGas;
             const basePriority = quotePriority > freshPriority ? quotePriority : freshPriority;
-            tx.maxPriorityFeePerGas = (basePriority * 120n) / 100n; // +20% buffer
-            
+            tx.maxPriorityFeePerGas = (basePriority * gasBufferPercent) / 100n;
+
             // Support both gasLimit and gas fields
             const gasLimitValue = transaction.gasLimit || transaction.gas;
             tx.gasLimit = gasLimitValue ? BigInt(gasLimitValue) : 500000n;
-            
+
             console.log('[GAS] EIP-1559 swap gas:', {
                 fromGasLimit: transaction.gasLimit,
                 fromGas: transaction.gas,
                 finalGasLimit: tx.gasLimit.toString(),
-                maxFeePerGas: tx.maxFeePerGas.toString()
+                maxFeePerGas: tx.maxFeePerGas.toString(),
+                isL2: isL2,
+                gasBufferPercent: Number(gasBufferPercent)
             });
         } else {
             // Legacy gas handling
             const quoteGasPrice = transaction.gasPrice ? BigInt(transaction.gasPrice) : 0n;
             const freshGasPrice = feeData.gasPrice || 0n;
             const baseGasPrice = quoteGasPrice > freshGasPrice ? quoteGasPrice : freshGasPrice;
-            tx.gasPrice = (baseGasPrice * 120n) / 100n; // +20% buffer
-            
+            tx.gasPrice = (baseGasPrice * gasBufferPercent) / 100n;
+
             // Support both gasLimit and gas fields
             const gasLimitValue = transaction.gasLimit || transaction.gas;
             tx.gasLimit = gasLimitValue ? BigInt(gasLimitValue) : 500000n;
-            
+
             console.log('[GAS] Legacy swap gas:', {
                 fromGasLimit: transaction.gasLimit,
                 fromGas: transaction.gas,
                 finalGasLimit: tx.gasLimit.toString(),
-                gasPrice: tx.gasPrice.toString()
+                gasPrice: tx.gasPrice.toString(),
+                isL2: isL2,
+                gasBufferPercent: Number(gasBufferPercent)
             });
         }
         
-        console.log('[SEND] Sending swap tx:', {
+        console.log('[SEND] Signing swap tx:', {
             to: tx.to,
             value: tx.value?.toString?.() || tx.value,
             chainId: tx.chainId,
@@ -3654,17 +3628,30 @@ async function sendSwapTransaction(transaction, network, swapMeta = {}) {
             maxFeePerGas: tx.maxFeePerGas?.toString?.(),
             gasPrice: tx.gasPrice?.toString?.()
         });
-        
-        // Send transaction
-        const txResponse = await wallet.sendTransaction(tx);
-        
-        console.log('[OK] Swap tx sent:', txResponse.hash);
-        
+
+        // Sign transaction offline
+        const signedTx = await wallet.signTransaction(tx);
+        console.log('[SIGN] Swap transaction signed');
+
+        // Send via backend RPC proxy
+        let txHash;
+        try {
+            const result = await fetchWithFallback(network, 'eth_sendRawTransaction', [signedTx]);
+            if (result.error) {
+                throw new Error(result.error.message || 'Failed to broadcast swap');
+            }
+            txHash = result.result;
+            console.log('[OK] Swap tx sent via RPC proxy:', txHash);
+        } catch (broadcastError) {
+            console.error('[ERROR] Failed to broadcast swap:', broadcastError.message);
+            throw new Error('Failed to broadcast swap: ' + broadcastError.message);
+        }
+
         // Store pending transaction with swap metadata
         await storePendingTransaction({
-            hash: txResponse.hash,
+            hash: txHash,
             type: 'Swap',
-            from: wallet.address,
+            from: walletAddress,
             to: transaction.to,
             value: transaction.value || '0x0',
             data: transaction.data,
@@ -3680,9 +3667,9 @@ async function sendSwapTransaction(transaction, network, swapMeta = {}) {
             swapFromTokenAddress: swapMeta.fromTokenAddress || null,
             swapToTokenAddress: swapMeta.toTokenAddress || null
         });
-        
+
         // Store PERSISTENT swap metadata (survives pending cleanup for 30 days)
-        await storeSwapMetadata(txResponse.hash, {
+        await storeSwapMetadata(txHash, {
             swapFromToken: swapMeta.fromToken || NETWORKS[network]?.symbol || 'ETH',
             swapToToken: swapMeta.toToken || 'Token',
             swapFromAmount: parseFloat(swapMeta.fromAmount) || 0,
@@ -3691,10 +3678,10 @@ async function sendSwapTransaction(transaction, network, swapMeta = {}) {
             swapToTokenAddress: swapMeta.toTokenAddress || null,
             network: network
         });
-        
-        return { 
-            success: true, 
-            hash: txResponse.hash,
+
+        return {
+            success: true,
+            hash: txHash,
             message: 'Swap transaction submitted'
         };
         
@@ -3900,12 +3887,8 @@ async function handleConfirmTransaction(request) {
             console.log('[KEY] Using private key from wallet');
         }
         
-        // Create ethers wallet
+        // Create ethers wallet for signing only (no provider - we use backend RPC proxy)
         const wallet = new ethers.Wallet(privateKey);
-        
-        // Get provider for current network
-        const rpc = networkConfig.rpc;
-        const provider = new ethers.JsonRpcProvider(rpc);
         
         // Get nonce using fallback RPCs
         let nonce;
@@ -3945,24 +3928,18 @@ async function handleConfirmTransaction(request) {
         
         console.log('✍️ Transaction signed');
         
-        // Send raw transaction using eth_sendRawTransaction (returns hash immediately)
+        // Send raw transaction via backend RPC proxy
         let txHash;
         try {
-            // Use fetchWithFallback for reliability
             const result = await fetchWithFallback(network, 'eth_sendRawTransaction', [signedTx]);
             if (result.error) {
                 throw new Error(result.error.message || 'Failed to send transaction');
             }
             txHash = result.result;
+            console.log('[OK] Transaction sent via RPC proxy:', txHash);
         } catch (broadcastError) {
-            // Fallback to provider.broadcastTransaction with timeout
-            console.log('[WARN] fetchWithFallback failed, trying provider.broadcastTransaction');
-            const broadcastPromise = provider.broadcastTransaction(signedTx);
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Broadcast timeout')), 15000)
-            );
-            const txResponse = await Promise.race([broadcastPromise, timeoutPromise]);
-            txHash = txResponse.hash;
+            console.error('[ERROR] Failed to broadcast transaction:', broadcastError.message);
+            throw new Error('Failed to broadcast transaction: ' + broadcastError.message);
         }
         
         console.log('[OK] Transaction sent:', txHash);
@@ -4221,19 +4198,17 @@ async function getTransactions(address, network) {
             try {
                 console.log(`[WAIT] Checking status of ${hash.substring(0, 10)}...`);
                 
-                // Try backend RPC first
+                // Use fetchWithFallback which tries backend first, then RPC proxy
                 let receipt = null;
                 try {
-                    const result = await callBackendRpc(network, 'eth_getTransactionReceipt', [hash]);
-                    if (result) {
-                        receipt = { blockNumber: parseInt(result.blockNumber, 16) };
+                    const result = await fetchWithFallback(network, 'eth_getTransactionReceipt', [hash]);
+                    if (result.result) {
+                        receipt = { blockNumber: parseInt(result.result.blockNumber, 16) };
                     }
-                } catch (backendErr) {
-                    // Fallback to direct RPC
-                    const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-                    receipt = await provider.getTransactionReceipt(hash);
+                } catch (rpcErr) {
+                    console.warn('[RPC] Failed to get receipt:', rpcErr.message);
                 }
-                
+
                 if (receipt && receipt.blockNumber) {
                     console.log(`[OK] Transaction ${hash.substring(0, 10)}... CONFIRMED in block ${receipt.blockNumber}`);
                     // Update status to Success instead of deleting
@@ -4256,37 +4231,60 @@ async function getTransactions(address, network) {
             
             // Get transaction history through backend (handles API keys securely)
             // Single request with includeTokens=true returns both native and ERC20 transactions
+            const txCacheKey = `txHistory_${chainId}_${address.toLowerCase()}`;
+
             try {
                 console.log(`[NET] Backend Transaction History API for ${networkConfig.name} (chainId: ${chainId})`);
-                
+
                 const historyData = await getBackendTransactionHistory(chainId, address, {
                     page: 1,
                     offset: 30,
                     sort: 'desc',
                     includeTokens: true
                 });
-                
+
                 // Backend returns combined transactions with type field
                 // Split into native and token transactions for processing
                 const allTransactions = historyData.transactions || [];
                 const nativeTxs = allTransactions.filter(tx => tx.type !== 'erc20');
                 const tokenTxs = allTransactions.filter(tx => tx.type === 'erc20');
-                
+
                 data = { status: '1', result: nativeTxs };
                 tokenTxData = { status: '1', result: tokenTxs };
-                
+
                 console.log(`[OK] Backend success: ${nativeTxs.length} native txs, ${tokenTxs.length} token txs`);
-                
+
+                // Cache successful response (5 min TTL)
+                await chrome.storage.local.set({
+                    [txCacheKey]: {
+                        nativeTxs,
+                        tokenTxs,
+                        timestamp: Date.now()
+                    }
+                });
+
                 // AUTO-DETECT TOKENS from ERC20 transactions
                 if (tokenTxs.length > 0) {
                     await autoDetectTokensFromTransactions(tokenTxs, chainId, address);
                 }
-                
+
             } catch (backendError) {
                 console.error(`[ERROR] Backend Transaction History failed:`, backendError.message);
-                // No fallback - backend is the only source
-                data = { status: '1', result: [] };
-                tokenTxData = { status: '1', result: [] };
+
+                // Try to use cached data if backend fails
+                const cached = await chrome.storage.local.get([txCacheKey]);
+                const cachedData = cached[txCacheKey];
+
+                if (cachedData && cachedData.nativeTxs) {
+                    const cacheAge = Date.now() - cachedData.timestamp;
+                    console.log(`[CACHE] Using cached tx history (age: ${Math.floor(cacheAge / 1000)}s)`);
+                    data = { status: '1', result: cachedData.nativeTxs };
+                    tokenTxData = { status: '1', result: cachedData.tokenTxs || [] };
+                } else {
+                    // No cache available
+                    data = { status: '1', result: [] };
+                    tokenTxData = { status: '1', result: [] };
+                }
             }
             
             // Process results
@@ -4911,22 +4909,19 @@ async function checkTransactionReceipt(txHash, network) {
         
         let receipt = null;
         
-        // 1. Try backend RPC first
+        // Use fetchWithFallback which tries backend first, then RPC proxy
         try {
-            const result = await callBackendRpc(network, 'eth_getTransactionReceipt', [txHash]);
-            if (result) {
+            const result = await fetchWithFallback(network, 'eth_getTransactionReceipt', [txHash]);
+            if (result.result) {
                 receipt = {
-                    blockNumber: parseInt(result.blockNumber, 16),
-                    status: result.status === '0x1' ? 1 : 0
+                    blockNumber: parseInt(result.result.blockNumber, 16),
+                    status: result.result.status === '0x1' ? 1 : 0
                 };
             }
-        } catch (backendError) {
-            console.warn('[RPC] Backend failed for getTransactionReceipt, trying direct:', backendError.message);
-            // 2. Fallback to direct RPC
-            const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-            receipt = await provider.getTransactionReceipt(txHash);
+        } catch (rpcError) {
+            console.warn('[RPC] Failed to get receipt:', rpcError.message);
         }
-        
+
         if (receipt && receipt.blockNumber) {
             // Transaction is confirmed - update storage
             const storage = await chrome.storage.local.get(['pendingTransactions']);
@@ -5109,7 +5104,7 @@ async function decryptData(encryptedBase64, password) {
     return decoder.decode(decryptedData);
 }
 
-console.log('[Forge] Forge Wallet Service Worker Ready!');
+console.log('[FortiX] FortiX Wallet Service Worker Ready!');
 
 // ERC20 Token ABI (only needed functions)
 const ERC20_ABI = [
@@ -5143,46 +5138,55 @@ async function getTokenBalance(address, tokenAddress, network) {
         
         const formattedBalance = ethers.formatUnits(balance, decimals);
         // CRITICAL: Floor balance to prevent "insufficient funds" errors
-        // toFixed() rounds mathematically which can give MORE than actual balance
-        const flooredBalance = Math.floor(parseFloat(formattedBalance) * 1000000) / 1000000;
-        
+        // Use actual token decimals for precision (not hardcoded 6)
+        // For display: use min(decimals, 8) to avoid excessive precision
+        const displayDecimals = Math.min(decimals, 8);
+        const multiplier = Math.pow(10, displayDecimals);
+        const flooredBalance = Math.floor(parseFloat(formattedBalance) * multiplier) / multiplier;
+
         return {
             success: true,
-            balance: flooredBalance.toString()
+            balance: flooredBalance.toString(),
+            decimals: decimals  // Return actual decimals for frontend use
         };
     } catch (error) {
-        console.warn(`[RPC] Backend failed for token ${tokenAddress} on ${network}, trying direct RPC:`, error.message);
+        console.warn(`[RPC] Backend failed for token ${tokenAddress} on ${network}, trying RPC proxy:`, error.message);
     }
-    
-    // 2. Fallback: Direct RPC (only if backend is completely down)
-    const rpcs = [networkConfig.rpc, ...(networkConfig.fallbackRpcs || [])];
-    let lastError = null;
-    
-    for (const rpc of rpcs) {
-        try {
-            const provider = new ethers.JsonRpcProvider(rpc);
-            const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-            
-            const [balance, decimals] = await Promise.all([
-                contract.balanceOf(address),
-                contract.decimals()
-            ]);
-            
+
+    // 2. Fallback: Use fetchWithFallback which tries backend then RPC proxy
+    try {
+        // ERC20 balanceOf call data
+        const balanceOfData = '0x70a08231' + address.slice(2).padStart(64, '0');
+        // ERC20 decimals call data
+        const decimalsData = '0x313ce567';
+
+        const [balanceResult, decimalsResult] = await Promise.all([
+            fetchWithFallback(network, 'eth_call', [{ to: tokenAddress, data: balanceOfData }, 'latest']),
+            fetchWithFallback(network, 'eth_call', [{ to: tokenAddress, data: decimalsData }, 'latest'])
+        ]);
+
+        if (balanceResult.result && decimalsResult.result) {
+            const balance = BigInt(balanceResult.result);
+            const decimals = parseInt(decimalsResult.result, 16);
+
             const formattedBalance = ethers.formatUnits(balance, decimals);
             // CRITICAL: Floor balance to prevent "insufficient funds" errors
-            const flooredBalance = Math.floor(parseFloat(formattedBalance) * 1000000) / 1000000;
-            
+            // Use actual token decimals for precision (not hardcoded 6)
+            const displayDecimals = Math.min(decimals, 8);
+            const multiplier = Math.pow(10, displayDecimals);
+            const flooredBalance = Math.floor(parseFloat(formattedBalance) * multiplier) / multiplier;
+
             return {
                 success: true,
-                balance: flooredBalance.toString()
+                balance: flooredBalance.toString(),
+                decimals: decimals  // Return actual decimals for frontend use
             };
-        } catch (error) {
-            lastError = error;
         }
+    } catch (fallbackError) {
+        console.warn(`[WARN] Token balance fetch failed for ${tokenAddress} on network ${network}:`, fallbackError?.message);
     }
-    
-    console.warn(`[WARN] Token balance fetch failed for ${tokenAddress} on network ${network}:`, lastError?.message || 'Unknown error');
-    return { success: false, error: lastError?.message || 'Failed to fetch balance' };
+
+    return { success: false, error: 'Failed to fetch balance' };
 }
 
 /**
@@ -5552,10 +5556,9 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
         }
         
         console.log(`[NET] Using network: ${networkConfig.name} (chainId: ${networkConfig.chainId})`);
-        
-        // Get provider for from chain
-        const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-        const connectedWallet = wallet.connect(provider);
+
+        // NOTE: We don't create provider with networkConfig.rpc because it may be invalid
+        // Instead, we use fetchWithFallback which routes through backend RPC proxy
         
         // Get nonce using fallback RPCs
         let nonce;
@@ -5571,8 +5574,8 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
             throw new Error('Failed to get transaction nonce: ' + error.message);
         }
         
-        // Get current gas price (backend with fallback to provider) and apply user preference
-        let feeData = await getGasPricesWithFallback(fromNetwork, provider);
+        // Get current gas price (backend with RPC fallback) and apply user preference
+        let feeData = await getGasPricesWithFallback(fromNetwork, null);
         feeData = await applyGasPreference(feeData);
         console.log('[GAS] Fee Data (with preference):', {
             gasPrice: feeData.gasPrice?.toString(),
@@ -5640,7 +5643,7 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
             });
         }
         
-        console.log('[SEND] Sending transaction:', JSON.stringify({
+        console.log('[SEND] Signing transaction:', JSON.stringify({
             to: tx.to,
             from: tx.from,
             data: tx.data ? `${tx.data.substring(0, 66)}...` : '0x',
@@ -5653,11 +5656,26 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
             maxFeePerGas: tx.maxFeePerGas?.toString?.() || tx.maxFeePerGas,
             maxPriorityFeePerGas: tx.maxPriorityFeePerGas?.toString?.() || tx.maxPriorityFeePerGas
         }, null, 2));
-        
-        // Send transaction
-        const txResponse = await connectedWallet.sendTransaction(tx);
-        console.log('[OK] Bridge transaction sent:', txResponse.hash);
-        console.log(`   Explorer: ${networkConfig.explorer}/tx/${txResponse.hash}`);
+
+        // Sign transaction offline (no provider needed)
+        const signedTx = await wallet.signTransaction(tx);
+        console.log('[SIGN] Transaction signed');
+
+        // Send via backend RPC proxy
+        let txHash;
+        try {
+            const result = await fetchWithFallback(fromNetwork, 'eth_sendRawTransaction', [signedTx]);
+            if (result.error) {
+                throw new Error(result.error.message || 'Failed to broadcast transaction');
+            }
+            txHash = result.result;
+            console.log('[OK] Bridge transaction sent via RPC proxy:', txHash);
+        } catch (broadcastError) {
+            console.error('[ERROR] Failed to broadcast transaction:', broadcastError.message);
+            throw new Error('Failed to broadcast bridge transaction: ' + broadcastError.message);
+        }
+
+        console.log(`   Explorer: ${networkConfig.explorer}/tx/${txHash}`);
         
         // Store bridge metadata PERSISTENTLY (survives pending cleanup)
         const bridgeMetadataToStore = {
@@ -5670,11 +5688,11 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
             bridgeTool: bridgeMeta.tool,
             timestamp: Date.now()
         };
-        await storeBridgeMetadata(txResponse.hash, bridgeMetadataToStore);
-        
+        await storeBridgeMetadata(txHash, bridgeMetadataToStore);
+
         // Store as pending transaction with bridge metadata
         await storePendingTransaction({
-            hash: txResponse.hash,
+            hash: txHash,
             type: 'Bridge',
             from: fromAddress,
             to: txRequest.to,
@@ -5697,7 +5715,7 @@ async function executeBridge(transactionOrQuote, fromAddress, fromNetwork, bridg
         
         return {
             success: true,
-            hash: txResponse.hash
+            hash: txHash
         };
     } catch (error) {
         console.error('[ERROR] Error executing bridge:', error);
@@ -5740,16 +5758,17 @@ async function cancelTransaction(originalHash, network) {
             throw new Error('No private key found');
         }
         
-        // Get provider
+        // Get network config and create wallet for signing only
         const networkConfig = NETWORKS[network];
-        const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-        const signer = new ethers.Wallet(privateKey, provider);
-        
-        // Get original transaction from blockchain - backend first
+        const wallet = new ethers.Wallet(privateKey);
+        const walletAddress = wallet.address;
+
+        // Get original transaction from blockchain via RPC proxy
         let originalTx;
         try {
-            const txData = await callBackendRpc(network, 'eth_getTransactionByHash', [originalHash]);
-            if (txData) {
+            const txResult = await fetchWithFallback(network, 'eth_getTransactionByHash', [originalHash]);
+            if (txResult.result) {
+                const txData = txResult.result;
                 originalTx = {
                     nonce: parseInt(txData.nonce, 16),
                     gasPrice: txData.gasPrice ? BigInt(txData.gasPrice) : null,
@@ -5758,9 +5777,9 @@ async function cancelTransaction(originalHash, network) {
                     blockNumber: txData.blockNumber ? parseInt(txData.blockNumber, 16) : null
                 };
             }
-        } catch (backendErr) {
-            console.warn('[RPC] Backend getTransaction failed, using provider:', backendErr.message);
-            originalTx = await provider.getTransaction(originalHash);
+        } catch (rpcErr) {
+            console.error('[RPC] Failed to get original transaction:', rpcErr.message);
+            throw new Error('Failed to fetch original transaction');
         }
         
         if (!originalTx) {
@@ -5778,26 +5797,27 @@ async function cancelTransaction(originalHash, network) {
             maxFeePerGas: originalTx.maxFeePerGas?.toString()
         });
         
-        // Get current gas prices - backend first
-        const feeData = await getGasPricesWithFallback(network, provider, 'fast');
-        
+        // Get current gas prices - backend with RPC proxy fallback
+        const feeData = await getGasPricesWithFallback(network, null, 'fast');
+
         let cancelTx;
         if (originalTx.maxFeePerGas) {
             // EIP-1559 transaction
             const newMaxFeePerGas = (originalTx.maxFeePerGas * 120n) / 100n;
             const newMaxPriorityFeePerGas = (originalTx.maxPriorityFeePerGas * 120n) / 100n;
-            
+
             // Use higher of original+20% or current network fees
             const finalMaxFee = newMaxFeePerGas > feeData.maxFeePerGas ? newMaxFeePerGas : feeData.maxFeePerGas * 120n / 100n;
             const finalPriorityFee = newMaxPriorityFeePerGas > feeData.maxPriorityFeePerGas ? newMaxPriorityFeePerGas : feeData.maxPriorityFeePerGas * 120n / 100n;
-            
+
             cancelTx = {
                 type: 2,
                 nonce: originalTx.nonce,
-                to: signer.address,              // Send to self
+                to: walletAddress,              // Send to self
                 value: 0n,                       // 0 ETH
                 data: '0x',
                 gasLimit: 21000n,
+                chainId: networkConfig.chainId,
                 maxFeePerGas: finalMaxFee,
                 maxPriorityFeePerGas: finalPriorityFee
             };
@@ -5805,39 +5825,53 @@ async function cancelTransaction(originalHash, network) {
             // Legacy transaction
             const newGasPrice = (originalTx.gasPrice * 120n) / 100n;
             const finalGasPrice = newGasPrice > feeData.gasPrice ? newGasPrice : feeData.gasPrice * 120n / 100n;
-            
+
             cancelTx = {
                 nonce: originalTx.nonce,
-                to: signer.address,
+                to: walletAddress,
                 value: 0n,
                 data: '0x',
                 gasLimit: 21000n,
+                chainId: networkConfig.chainId,
                 gasPrice: finalGasPrice
             };
         }
-        
-        console.log('[SEND] Sending cancellation transaction:', cancelTx);
-        
-        // Send cancellation transaction
-        const txResponse = await signer.sendTransaction(cancelTx);
-        
-        console.log('[OK] Cancellation transaction sent:', txResponse.hash);
-        
+
+        console.log('[SEND] Signing cancellation transaction:', cancelTx);
+
+        // Sign transaction offline
+        const signedTx = await wallet.signTransaction(cancelTx);
+        console.log('[SIGN] Cancel transaction signed');
+
+        // Send via backend RPC proxy
+        let txHash;
+        try {
+            const result = await fetchWithFallback(network, 'eth_sendRawTransaction', [signedTx]);
+            if (result.error) {
+                throw new Error(result.error.message || 'Failed to broadcast cancellation');
+            }
+            txHash = result.result;
+            console.log('[OK] Cancellation tx sent via RPC proxy:', txHash);
+        } catch (broadcastError) {
+            console.error('[ERROR] Failed to broadcast cancellation:', broadcastError.message);
+            throw new Error('Failed to broadcast cancellation: ' + broadcastError.message);
+        }
+
         // Update pending transactions
         const pendingTxs = storage.pendingTransactions?.[network] || {};
         const hashLower = originalHash.toLowerCase();
         if (pendingTxs[hashLower]) {
             pendingTxs[hashLower].status = 'Cancelling';
-            pendingTxs[hashLower].cancelHash = txResponse.hash;
+            pendingTxs[hashLower].cancelHash = txHash;
         }
-        
+
         const allPending = storage.pendingTransactions || {};
         allPending[network] = pendingTxs;
         await chrome.storage.local.set({ pendingTransactions: allPending });
-        
+
         return {
             success: true,
-            hash: txResponse.hash
+            hash: txHash
         };
     } catch (error) {
         console.error('Error cancelling transaction:', error);
@@ -5879,42 +5913,63 @@ async function speedUpTransaction(originalHash, network) {
             throw new Error('No private key found');
         }
         
-        // Get provider
+        // Get network config and create wallet for signing only
         const networkConfig = NETWORKS[network];
-        const provider = new ethers.JsonRpcProvider(networkConfig.rpc);
-        const signer = new ethers.Wallet(privateKey, provider);
-        
-        // Get original transaction from blockchain
-        const originalTx = await provider.getTransaction(originalHash);
+        const wallet = new ethers.Wallet(privateKey);
+        const walletAddress = wallet.address;
+
+        // Get original transaction from blockchain via RPC proxy
+        let originalTx;
+        try {
+            const txResult = await fetchWithFallback(network, 'eth_getTransactionByHash', [originalHash]);
+            if (txResult.result) {
+                const txData = txResult.result;
+                originalTx = {
+                    nonce: parseInt(txData.nonce, 16),
+                    to: txData.to,
+                    value: BigInt(txData.value || '0x0'),
+                    data: txData.input || txData.data,
+                    gasLimit: BigInt(txData.gas || '0x5208'),
+                    gasPrice: txData.gasPrice ? BigInt(txData.gasPrice) : null,
+                    maxFeePerGas: txData.maxFeePerGas ? BigInt(txData.maxFeePerGas) : null,
+                    maxPriorityFeePerGas: txData.maxPriorityFeePerGas ? BigInt(txData.maxPriorityFeePerGas) : null,
+                    blockNumber: txData.blockNumber ? parseInt(txData.blockNumber, 16) : null
+                };
+            }
+        } catch (rpcErr) {
+            console.error('[RPC] Failed to get original transaction:', rpcErr.message);
+            throw new Error('Failed to fetch original transaction');
+        }
+
         if (!originalTx) {
             throw new Error('Transaction not found on blockchain');
         }
-        
+
         // Check if already mined
         if (originalTx.blockNumber) {
             throw new Error('Transaction already confirmed, cannot speed up');
         }
-        
+
         console.log('[LOG] Original transaction:', {
             nonce: originalTx.nonce,
             to: originalTx.to,
             value: originalTx.value?.toString(),
             gasLimit: originalTx.gasLimit?.toString()
         });
-        
-        // Get current gas prices
-        const feeData = await provider.getFeeData();
-        
+
+        // Get current gas prices - backend with RPC proxy fallback
+        const feeData = await getGasPricesWithFallback(network, null, 'fast');
+
         let speedUpTx;
         if (originalTx.maxFeePerGas) {
             // EIP-1559 transaction
             const newMaxFeePerGas = (originalTx.maxFeePerGas * 120n) / 100n;
             const newMaxPriorityFeePerGas = (originalTx.maxPriorityFeePerGas * 120n) / 100n;
-            
+
             // Use higher of original+20% or current network fees
             const finalMaxFee = newMaxFeePerGas > feeData.maxFeePerGas ? newMaxFeePerGas : feeData.maxFeePerGas * 120n / 100n;
             const finalPriorityFee = newMaxPriorityFeePerGas > feeData.maxPriorityFeePerGas ? newMaxPriorityFeePerGas : feeData.maxPriorityFeePerGas * 120n / 100n;
-            
+
             speedUpTx = {
                 type: 2,
                 nonce: originalTx.nonce,
@@ -5922,6 +5977,7 @@ async function speedUpTransaction(originalHash, network) {
                 value: originalTx.value,
                 data: originalTx.data,
                 gasLimit: originalTx.gasLimit,
+                chainId: networkConfig.chainId,
                 maxFeePerGas: finalMaxFee,
                 maxPriorityFeePerGas: finalPriorityFee
             };
@@ -5929,28 +5985,42 @@ async function speedUpTransaction(originalHash, network) {
             // Legacy transaction
             const newGasPrice = (originalTx.gasPrice * 120n) / 100n;
             const finalGasPrice = newGasPrice > feeData.gasPrice ? newGasPrice : feeData.gasPrice * 120n / 100n;
-            
+
             speedUpTx = {
                 nonce: originalTx.nonce,
                 to: originalTx.to,
                 value: originalTx.value,
                 data: originalTx.data,
                 gasLimit: originalTx.gasLimit,
+                chainId: networkConfig.chainId,
                 gasPrice: finalGasPrice
             };
         }
-        
-        console.log('[SEND] Sending speed-up transaction:', speedUpTx);
-        
-        // Send speed-up transaction
-        const txResponse = await signer.sendTransaction(speedUpTx);
-        
-        console.log('[OK] Speed-up transaction sent:', txResponse.hash);
-        
+
+        console.log('[SEND] Signing speed-up transaction:', speedUpTx);
+
+        // Sign transaction offline
+        const signedTx = await wallet.signTransaction(speedUpTx);
+        console.log('[SIGN] Speed-up transaction signed');
+
+        // Send via backend RPC proxy
+        let txHash;
+        try {
+            const result = await fetchWithFallback(network, 'eth_sendRawTransaction', [signedTx]);
+            if (result.error) {
+                throw new Error(result.error.message || 'Failed to broadcast speed-up');
+            }
+            txHash = result.result;
+            console.log('[OK] Speed-up tx sent via RPC proxy:', txHash);
+        } catch (broadcastError) {
+            console.error('[ERROR] Failed to broadcast speed-up:', broadcastError.message);
+            throw new Error('Failed to broadcast speed-up: ' + broadcastError.message);
+        }
+
         // Update pending transactions
         const pendingTxs = storage.pendingTransactions?.[network] || {};
         const hashLower = originalHash.toLowerCase();
-        
+
         // Get swap metadata from original if it was a swap
         const originalPending = pendingTxs[hashLower];
         const swapMeta = originalPending?.isSwap ? {
@@ -5960,16 +6030,16 @@ async function speedUpTransaction(originalHash, network) {
             swapFromAmount: originalPending.swapFromAmount,
             swapToAmount: originalPending.swapToAmount
         } : {};
-        
+
         if (pendingTxs[hashLower]) {
             pendingTxs[hashLower].status = 'Replaced';
-            pendingTxs[hashLower].replacementHash = txResponse.hash;
+            pendingTxs[hashLower].replacementHash = txHash;
         }
-        
+
         // Add new tx to pending with swap metadata
-        pendingTxs[txResponse.hash.toLowerCase()] = {
-            hash: txResponse.hash,
-            from: signer.address,
+        pendingTxs[txHash.toLowerCase()] = {
+            hash: txHash,
+            from: walletAddress,
             to: originalTx.to,
             value: originalTx.value.toString(),
             data: originalTx.data,
@@ -5979,14 +6049,14 @@ async function speedUpTransaction(originalHash, network) {
             type: originalPending?.type || 'Send',
             ...swapMeta
         };
-        
+
         const allPending = storage.pendingTransactions || {};
         allPending[network] = pendingTxs;
         await chrome.storage.local.set({ pendingTransactions: allPending });
-        
+
         return {
             success: true,
-            hash: txResponse.hash
+            hash: txHash
         };
     } catch (error) {
         console.error('Error speeding up transaction:', error);
@@ -6018,38 +6088,99 @@ async function getGasPrice(network) {
         
         if (data.success && data.data) {
             // Use 'fast' tier for gas price
-            const prices = data.data.fast || data.data.standard;
-            
-            if (prices && prices.maxFeePerGas) {
-                const maxFeePerGasWei = BigInt(prices.maxFeePerGas);
-                const maxFeePerGasGwei = Number(maxFeePerGasWei) / 1e9;
-                
-                const priorityFeeWei = prices.maxPriorityFeePerGas ? BigInt(prices.maxPriorityFeePerGas) : 0n;
-                const priorityFeeGwei = Number(priorityFeeWei) / 1e9;
-                
-                // Calculate baseFee from maxFee - priorityFee (approximate)
-                const baseFeeGwei = Math.max(maxFeePerGasGwei - priorityFeeGwei, 1);
-                
-                console.log(`[OK] Gas price from backend (EIP-1559):`, {
-                    baseFeeGwei: baseFeeGwei.toFixed(4),
-                    priorityFeeGwei: priorityFeeGwei.toFixed(4),
-                    maxFeePerGasGwei: maxFeePerGasGwei.toFixed(4)
-                });
-                
-                return {
-                    success: true,
-                    gasPriceGwei: maxFeePerGasGwei,
-                    baseFeeGwei: baseFeeGwei,
-                    priorityFeeGwei: priorityFeeGwei,
-                    type: 'eip1559'
-                };
+            const prices = data.data.fast || data.data.standard || data.data.medium;
+
+            if (prices) {
+                // Check for EIP-1559 format (maxFeePerGas)
+                if (prices.maxFeePerGas) {
+                    const maxFeePerGasWei = BigInt(prices.maxFeePerGas);
+                    const maxFeePerGasGwei = Number(maxFeePerGasWei) / 1e9;
+
+                    const priorityFeeWei = prices.maxPriorityFeePerGas ? BigInt(prices.maxPriorityFeePerGas) : 0n;
+                    const priorityFeeGwei = Number(priorityFeeWei) / 1e9;
+
+                    // Calculate baseFee from maxFee - priorityFee (approximate)
+                    const baseFeeGwei = Math.max(maxFeePerGasGwei - priorityFeeGwei, 1);
+
+                    console.log(`[OK] Gas price from backend (EIP-1559):`, {
+                        baseFeeGwei: baseFeeGwei.toFixed(4),
+                        priorityFeeGwei: priorityFeeGwei.toFixed(4),
+                        maxFeePerGasGwei: maxFeePerGasGwei.toFixed(4)
+                    });
+
+                    return {
+                        success: true,
+                        gasPriceGwei: maxFeePerGasGwei,
+                        baseFeeGwei: baseFeeGwei,
+                        priorityFeeGwei: priorityFeeGwei,
+                        type: 'eip1559'
+                    };
+                }
+
+                // Check for legacy format (gasPrice) - used by BSC, Polygon, etc.
+                if (prices.gasPrice) {
+                    const gasPriceWei = BigInt(prices.gasPrice);
+                    const gasPriceGwei = Number(gasPriceWei) / 1e9;
+
+                    console.log(`[OK] Gas price from backend (legacy):`, {
+                        gasPriceGwei: gasPriceGwei.toFixed(4)
+                    });
+
+                    return {
+                        success: true,
+                        gasPriceGwei: gasPriceGwei,
+                        baseFeeGwei: gasPriceGwei,
+                        priorityFeeGwei: 0,
+                        type: 'legacy'
+                    };
+                }
             }
         }
-        
-        throw new Error('Invalid backend gas response');
+
+        throw new Error('Invalid backend gas response - no gasPrice or maxFeePerGas');
         
     } catch (error) {
         console.error('Error getting gas price from backend:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Generic eth_call through backend RPC proxy
+// Used for allowance checks, contract reads, etc.
+// NO DIRECT RPC - all calls go through backend
+async function handleEthCall(network, to, data) {
+    try {
+        console.log(`[RPC] eth_call via backend for network ${network}:`, {
+            to: to?.substring(0, 10) + '...',
+            dataLength: data?.length
+        });
+
+        // Validate inputs
+        if (!network || !to || !data) {
+            throw new Error('Missing required parameters: network, to, data');
+        }
+
+        // Use fetchWithFallback which routes through backend RPC proxy
+        const result = await fetchWithFallback(network, 'eth_call', [
+            { to, data },
+            'latest'
+        ]);
+
+        if (result.error) {
+            throw new Error(result.error.message || 'eth_call failed');
+        }
+
+        console.log(`[RPC] eth_call success, result length: ${result.result?.length}`);
+
+        return {
+            success: true,
+            result: result.result
+        };
+    } catch (error) {
+        console.error('[RPC] eth_call error:', error.message);
         return {
             success: false,
             error: error.message
@@ -6079,41 +6210,52 @@ async function estimateMaxGas(network) {
         
         if (data.success && data.data) {
             // Use 'instant' tier for MAX calculation (worst case)
-            const prices = data.data.instant || data.data.fast;
-            
-            if (prices && prices.maxFeePerGas) {
-                const maxFeePerGasWei = BigInt(prices.maxFeePerGas);
-                const maxFeePerGasGwei = Number(maxFeePerGasWei) / 1e9;
-                
-                // Calculate baseFee (approximate from maxFee)
-                const priorityFeeWei = prices.maxPriorityFeePerGas ? BigInt(prices.maxPriorityFeePerGas) : 0n;
-                const priorityFeeGwei = Number(priorityFeeWei) / 1e9;
-                const baseFeeGwei = Math.max(maxFeePerGasGwei - priorityFeeGwei, 1);
-                
+            const prices = data.data.instant || data.data.fast || data.data.medium;
+
+            if (prices) {
                 // Gas limit for simple transfer
                 const gasLimit = 21000;
-                
-                // Calculate maximum cost
-                const maxGasCostGwei = gasLimit * maxFeePerGasGwei;
-                const maxGasCostETH = maxGasCostGwei / 1e9;
-                
-                console.log(`[OK] Max gas cost from backend:`, {
-                    baseFeeGwei: baseFeeGwei.toFixed(2),
-                    maxFeePerGasGwei: maxFeePerGasGwei.toFixed(2),
-                    gasLimit: gasLimit,
-                    maxGasCostETH: maxGasCostETH.toFixed(6)
-                });
-                
-                return {
-                    success: true,
-                    maxGasCostETH: maxGasCostETH,
-                    baseFeeGwei: baseFeeGwei,
-                    maxFeePerGasGwei: maxFeePerGasGwei
-                };
+                let gasPriceGwei, baseFeeGwei;
+
+                // Check for EIP-1559 format
+                if (prices.maxFeePerGas) {
+                    const maxFeePerGasWei = BigInt(prices.maxFeePerGas);
+                    gasPriceGwei = Number(maxFeePerGasWei) / 1e9;
+
+                    const priorityFeeWei = prices.maxPriorityFeePerGas ? BigInt(prices.maxPriorityFeePerGas) : 0n;
+                    const priorityFeeGwei = Number(priorityFeeWei) / 1e9;
+                    baseFeeGwei = Math.max(gasPriceGwei - priorityFeeGwei, 1);
+                }
+                // Check for legacy format (gasPrice) - used by BSC, Polygon, etc.
+                else if (prices.gasPrice) {
+                    const gasPriceWei = BigInt(prices.gasPrice);
+                    gasPriceGwei = Number(gasPriceWei) / 1e9;
+                    baseFeeGwei = gasPriceGwei;
+                }
+
+                if (gasPriceGwei) {
+                    // Calculate maximum cost
+                    const maxGasCostGwei = gasLimit * gasPriceGwei;
+                    const maxGasCostETH = maxGasCostGwei / 1e9;
+
+                    console.log(`[OK] Max gas cost from backend:`, {
+                        baseFeeGwei: baseFeeGwei.toFixed(2),
+                        gasPriceGwei: gasPriceGwei.toFixed(2),
+                        gasLimit: gasLimit,
+                        maxGasCostETH: maxGasCostETH.toFixed(6)
+                    });
+
+                    return {
+                        success: true,
+                        maxGasCostETH: maxGasCostETH,
+                        baseFeeGwei: baseFeeGwei,
+                        maxFeePerGasGwei: gasPriceGwei
+                    };
+                }
             }
         }
-        
-        throw new Error('Invalid backend gas response');
+
+        throw new Error('Invalid backend gas response - no gasPrice or maxFeePerGas');
         
     } catch (error) {
         console.error('Error estimating max gas:', error);
@@ -6261,13 +6403,13 @@ async function exportPrivateKey(password, accountIndex = 0) {
 
 // Open side panel when extension icon is clicked
 chrome.action.onClicked.addListener((tab) => {
-    console.log('[Forge] Extension icon clicked, opening side panel');
+    console.log('[FortiX] Extension icon clicked, opening side panel');
     chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
 // Enable side panel for all tabs
 chrome.runtime.onInstalled.addListener(() => {
-    console.log('[Forge] Extension installed, enabling side panel');
+    console.log('[FortiX] Extension installed, enabling side panel');
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
 

@@ -226,4 +226,8 @@ document.getElementById('aiChatInput')?.addEventListener('keypress', (e) => {
     }
 });
 
+// AI Support modal open/close (CSP compliant - no inline handlers)
+document.getElementById('openAISupportBtn')?.addEventListener('click', openAISupport);
+document.getElementById('aiSupportCloseBtn')?.addEventListener('click', closeAISupport);
+
 console.log('[OK] FSS & AI Support integrated');

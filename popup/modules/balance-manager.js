@@ -9,7 +9,7 @@
  * Архітектура:
  * - Підтримує необмежену кількість мереж і токенів
  * - Кешування з TTL для оптимізації API викликів
- * - Multi-source price fetching (Binance → CoinGecko → Static fallback)
+ * - Backend API for prices (FortixAPI.getTokenPrices)
  * - Єдина точка істини для всіх UI компонентів
  *
  * @example
@@ -44,45 +44,53 @@ const BalanceManager = {
     // === CONFIGURATION ===
 
     /**
-     * Binance symbols mapping for all supported networks
+     * Symbol to CoinGecko ID mapping for native tokens
+     * Used to fetch prices from backend API
      */
-    BINANCE_SYMBOLS: {
-        '1': 'ETHUSDT',
-        '8453': 'ETHUSDT',     // Base uses ETH
-        '42161': 'ETHUSDT',    // Arbitrum uses ETH
-        '10': 'ETHUSDT',       // Optimism uses ETH
-        '137': 'POLUSDT',      // Polygon (POL token after rebrand from MATIC in Sept 2024)
-        '56': 'BNBUSDT',       // BSC
-        '43114': 'AVAXUSDT',   // Avalanche
-        '250': 'FTMUSDT'       // Fantom
-    },
-
-    /**
-     * CoinGecko IDs mapping (fallback source)
-     */
-    COINGECKO_IDS: {
-        '1': 'ethereum',
-        '8453': 'ethereum',
-        '42161': 'ethereum',
-        '10': 'ethereum',
-        '137': 'polygon-ecosystem-token',  // POL token (rebranded from MATIC Sept 2024)
-        '56': 'binancecoin',
-        '43114': 'avalanche-2',
-        '250': 'fantom'
-    },
-
-    /**
-     * Static fallback prices (last resort when APIs fail)
-     */
-    FALLBACK_PRICES: {
-        '1': 3150,      // ETH
-        '8453': 3150,   // Base (ETH)
-        '42161': 3150,  // Arbitrum (ETH)
-        '10': 3150,     // Optimism (ETH)
-        '137': 0.1245,  // POL (Polygon - rebranded from MATIC)
-        '56': 910,      // BNB (BSC)
-        '43114': 13.8,  // AVAX (Avalanche)
-        '250': 0.70     // FTM (Fantom)
+    SYMBOL_TO_COINGECKO: {
+        // Major tokens
+        'ETH': 'ethereum',
+        'WETH': 'ethereum',
+        'BNB': 'binancecoin',
+        'WBNB': 'binancecoin',
+        'MATIC': 'matic-network',
+        'WMATIC': 'matic-network',
+        'POL': 'polygon-ecosystem-token',
+        'AVAX': 'avalanche-2',
+        'WAVAX': 'avalanche-2',
+        'FTM': 'fantom',
+        'WFTM': 'fantom',
+        // L2 & Alt L1
+        'ARB': 'arbitrum',
+        'OP': 'optimism',
+        'MNT': 'mantle',
+        'CELO': 'celo',
+        'GLMR': 'moonbeam',
+        'MOVR': 'moonriver',
+        'xDAI': 'xdai',
+        'WXDAI': 'xdai',
+        'CRO': 'crypto-com-chain',
+        'FTN': 'fasttoken',
+        'KAVA': 'kava',
+        'METIS': 'metis-token',
+        'ONE': 'harmony',
+        'FUSE': 'fuse-network-token',
+        // New chains
+        'S': 'sonic-3',
+        'SEI': 'sei-network',
+        'BERA': 'berachain-bera',
+        'RON': 'ronin',
+        'XDC': 'xdce-crowd-sale',
+        'BTT': 'bittorrent',
+        'frxETH': 'frax-ether',
+        'WLD': 'worldcoin-wld',
+        'APE': 'apecoin',
+        'TAIKO': 'taiko',
+        // Stablecoins (for reference)
+        'USDT': 'tether',
+        'USDC': 'usd-coin',
+        'DAI': 'dai',
+        'BUSD': 'binance-usd'
     },
 
     PRICE_CACHE_TTL: 120000, // 2 minutes cache for prices
@@ -115,8 +123,17 @@ const BalanceManager = {
     },
 
     /**
-     * Fetch ціни для всіх мереж з кешуванням (multi-source fallback)
-     * Source priority: Binance API → CoinGecko API → Static fallback
+     * Convert symbol to CoinGecko ID
+     * @param {string} symbol - Token symbol (e.g., 'ETH', 'BNB')
+     * @returns {string|null} CoinGecko ID or null
+     */
+    symbolToCoinGeckoId(symbol) {
+        if (!symbol) return null;
+        return this.SYMBOL_TO_COINGECKO[symbol.toUpperCase()] || null;
+    },
+
+    /**
+     * Fetch ціни для всіх мереж через Backend API
      * @returns {Promise<Object>} Prices object { networkId: price }
      */
     async fetchNativePrices() {
@@ -130,76 +147,92 @@ const BalanceManager = {
             return this.data.nativePrices;
         }
 
-        console.log('[WAIT] Fetching new prices from APIs...');
+        console.log('[WAIT] Fetching prices from Backend API...');
 
         const prices = {};
 
-        // Try Source 1: Binance API (fastest, most reliable)
         try {
-            const symbols = [...new Set(Object.values(this.BINANCE_SYMBOLS))];
-            const symbolsParam = JSON.stringify(symbols);
+            // Get all enabled networks and their symbols
+            const networkSymbols = {}; // { networkId: symbol }
+            const coingeckoIds = new Set();
+            const symbolToNetworks = {}; // { coingeckoId: [networkIds] }
 
-            const response = await fetch(
-                `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(symbolsParam)}`,
-                { signal: AbortSignal.timeout(5000) }
-            );
+            // Collect symbols from all enabled networks
+            if (typeof NETWORKS !== 'undefined') {
+                for (const [networkId, network] of Object.entries(NETWORKS)) {
+                    const symbol = network.symbol;
+                    if (symbol) {
+                        networkSymbols[networkId] = symbol;
+                        const coingeckoId = this.symbolToCoinGeckoId(symbol);
+                        if (coingeckoId) {
+                            coingeckoIds.add(coingeckoId);
+                            if (!symbolToNetworks[coingeckoId]) {
+                                symbolToNetworks[coingeckoId] = [];
+                            }
+                            symbolToNetworks[coingeckoId].push(networkId);
+                        }
+                    }
+                }
+            }
 
-            if (response.ok) {
-                const data = await response.json();
-                const priceMap = {};
-                data.forEach(item => {
-                    priceMap[item.symbol] = parseFloat(item.price);
-                });
+            // Also add current network if not in NETWORKS yet
+            if (typeof currentNetwork !== 'undefined' && typeof NETWORKS !== 'undefined') {
+                const network = NETWORKS[currentNetwork];
+                if (network?.symbol) {
+                    const coingeckoId = this.symbolToCoinGeckoId(network.symbol);
+                    if (coingeckoId) {
+                        coingeckoIds.add(coingeckoId);
+                        if (!symbolToNetworks[coingeckoId]) {
+                            symbolToNetworks[coingeckoId] = [];
+                        }
+                        if (!symbolToNetworks[coingeckoId].includes(currentNetwork)) {
+                            symbolToNetworks[coingeckoId].push(currentNetwork);
+                        }
+                    }
+                }
+            }
 
-                // Map Binance prices to networkIds
-                for (const [networkId, symbol] of Object.entries(this.BINANCE_SYMBOLS)) {
-                    prices[networkId] = priceMap[symbol] || 0;
+            if (coingeckoIds.size === 0) {
+                console.warn('[WARN] No CoinGecko IDs found for networks');
+                return prices;
+            }
+
+            console.log('[SYNC] Fetching prices for:', [...coingeckoIds]);
+
+            // Call Backend API via FortixAPI
+            const response = await FortixAPI.getTokenPrices({
+                tokens: [...coingeckoIds],
+                vsCurrency: 'usd'
+            });
+
+            if (response.success && response.data?.prices) {
+                // Map prices back to networkIds
+                for (const [coingeckoId, priceData] of Object.entries(response.data.prices)) {
+                    const price = priceData.price || 0;
+                    const networkIds = symbolToNetworks[coingeckoId] || [];
+
+                    for (const networkId of networkIds) {
+                        prices[networkId] = price;
+                    }
                 }
 
                 this.data.nativePrices = prices;
                 this.data.timestamps.nativePrices = now;
-                console.log('[OK] Binance prices fetched:', prices);
+                console.log('[OK] Backend prices fetched:', prices);
                 return prices;
             }
 
-            throw new Error(`Binance API: ${response.status}`);
-        } catch (binanceError) {
-            console.warn('[WARN] Binance API failed, trying CoinGecko...', binanceError.message);
+            throw new Error('Invalid response from Backend API');
+        } catch (error) {
+            console.error('[ERROR] Backend price fetch failed:', error.message);
 
-            // Try Source 2: CoinGecko API (fallback)
-            try {
-                const ids = [...new Set(Object.values(this.COINGECKO_IDS))].join(',');
-                const response = await fetch(
-                    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
-                    { signal: AbortSignal.timeout(5000) }
-                );
-
-                if (response.ok) {
-                    const data = await response.json();
-
-                    // Map CoinGecko prices to networkIds
-                    for (const [networkId, coinId] of Object.entries(this.COINGECKO_IDS)) {
-                        prices[networkId] = data[coinId]?.usd || 0;
-                    }
-
-                    this.data.nativePrices = prices;
-                    this.data.timestamps.nativePrices = now;
-                    console.log('[OK] CoinGecko prices fetched:', prices);
-                    return prices;
-                }
-
-                throw new Error(`CoinGecko API: ${response.status}`);
-            } catch (coingeckoError) {
-                console.warn('[WARN] CoinGecko API also failed, using static fallback prices', coingeckoError.message);
-
-                // Source 3: Static fallback prices (last resort)
-                Object.assign(prices, this.FALLBACK_PRICES);
-
-                this.data.nativePrices = prices;
-                this.data.timestamps.nativePrices = now - 60000; // Expire in 1 minute to retry sooner
-                console.log('[OK] Using static fallback prices:', prices);
-                return prices;
+            // Return cached prices if available, otherwise empty
+            if (Object.keys(this.data.nativePrices).length > 0) {
+                console.log('[OK] Using stale cached prices');
+                return this.data.nativePrices;
             }
+
+            return prices;
         }
     },
 

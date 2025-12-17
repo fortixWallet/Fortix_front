@@ -760,6 +760,29 @@ const TOKEN_FULL_NAMES = {
     'JOE': 'Trader Joe', 'STG': 'Stargate', 'VELO': 'Velodrome'
 };
 
+// Get popular tokens as array for ANY chain (used by loadBalance)
+// Returns: [{ symbol, name, address, decimals }, ...]
+function getPopularTokensArray(chainId) {
+    const id = String(chainId);
+    const tokensMap = getTokensSync(id); // { symbol: address, ... }
+
+    const result = [];
+    for (const [symbol, address] of Object.entries(tokensMap)) {
+        // Skip native placeholder
+        if (address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') continue;
+
+        const metadata = getTokenMetadata(id, symbol);
+        result.push({
+            symbol: symbol,
+            name: metadata.name || symbol,
+            address: address,
+            decimals: metadata.decimals || getTokenDecimals(symbol, chainId)
+        });
+    }
+
+    return result;
+}
+
 // Swap state
 let swapSlippage = 0.5;
 let currentSwapQuote = null;

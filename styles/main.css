@@ -1,4 +1,4 @@
-/* Forge Wallet - Main Styles (Based on ForgeETH) */
+/* FortiX Wallet - Main Styles (Based on ForgeETH) */
 
 * {
     margin: 0;
@@ -1186,6 +1186,65 @@ body {
     opacity: 1;
 }
 
+/* Network Toggle for user-added networks */
+.network-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.network-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.network-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    transition: 0.2s;
+    border-radius: 22px;
+}
+
+.network-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text-muted);
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+.network-toggle input:checked + .network-toggle-slider {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.network-toggle input:checked + .network-toggle-slider:before {
+    transform: translateX(18px);
+    background-color: white;
+}
+
+.network-list-item.user-added .network-item-check {
+    display: none;
+}
+
+.network-list-item.user-added.selected .network-item-check {
+    display: block;
+}
+
 .network-list-empty {
     padding: 40px 16px;
     text-align: center;
@@ -1243,6 +1302,50 @@ body {
 .network-search-toggle:hover {
     background: var(--bg-secondary);
     color: var(--text-primary);
+}
+
+/* Network Add Footer - Fixed at bottom */
+.network-add-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-color);
+    z-index: 10;
+}
+
+.network-add-footer-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.network-add-footer-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.network-add-footer-btn svg {
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.network-add-footer-btn:hover svg {
+    color: var(--primary-color);
 }
 
 /* Network Search Container */
@@ -1406,6 +1509,167 @@ body {
     padding: 2px 6px;
     border-radius: 4px;
     margin-left: 8px;
+}
+
+/* Add Network Styles */
+.add-network-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.add-network-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+.add-network-item:active {
+    transform: scale(0.98);
+}
+
+.add-network-item.adding {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.add-network-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.add-network-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: contain;
+    background: var(--bg-tertiary);
+}
+
+.add-network-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.add-network-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.add-network-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.add-network-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.add-network-badge.swap {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.add-network-badge.bridge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3B82F6;
+}
+
+.add-network-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--primary-color);
+    color: white;
+    flex-shrink: 0;
+}
+
+.add-network-action svg {
+    width: 16px;
+    height: 16px;
+}
+
+.add-network-action.loading {
+    background: var(--bg-tertiary);
+}
+
+.add-network-action.loading .spinner-small {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+}
+
+.spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Network remove button */
+.manage-network-remove {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+    border: none;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.manage-network-remove:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.manage-network-item.user-added .manage-network-remove {
+    display: flex;
+}
+
+.manage-network-item.hardcoded .manage-network-remove {
+    display: none !important;
+}
+
+/* Modal back button */
+.modal-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.modal-back-btn:hover {
+    background: var(--bg-tertiary);
 }
 
 .modal-body {
@@ -1648,6 +1912,74 @@ body {
     color: var(--text-primary);
     font-weight: 600;
     font-family: var(--font-mono);
+}
+
+/* Token Trust Badges */
+.token-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.token-badge-verified {
+    color: #22c55e;
+    font-weight: 700;
+}
+
+.token-badge-popular {
+    color: #f59e0b;
+    font-weight: 700;
+}
+
+.token-badge-unverified {
+    color: #ef4444;
+    font-size: 9px;
+}
+
+/* Token metadata preview in add token modal */
+.token-metadata-preview {
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-top: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.token-metadata-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.token-metadata-label {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.token-metadata-value {
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.token-trust-verified {
+    color: #22c55e;
+}
+
+.token-trust-popular {
+    color: #f59e0b;
+}
+
+.token-trust-unknown {
+    color: var(--text-muted);
+}
+
+.token-trust-warning {
+    color: #ef4444;
 }
 
 /* Scrollbar */
@@ -2159,6 +2491,69 @@ input:checked + .toggle-slider:before {
 :root.light-theme .manage-networks-info {
     background: #F6F8FA !important;
     border-color: #E5E7EB !important;
+}
+
+:root.light-theme .add-network-item {
+    background: #F9FAFB;
+    border-color: #E5E7EB;
+}
+
+:root.light-theme .add-network-item:hover {
+    background: #F3F4F6;
+}
+
+:root.light-theme .add-network-icon {
+    background: #E5E7EB;
+}
+
+/* Network modal buttons - light theme */
+:root.light-theme .network-search-toggle,
+:root.light-theme .modal-close-btn {
+    background: #F3F4F6 !important;
+    color: #374151 !important;
+}
+
+:root.light-theme .network-search-toggle:hover,
+:root.light-theme .modal-close-btn:hover {
+    background: #E5E7EB !important;
+    color: #111827 !important;
+}
+
+:root.light-theme .network-testnet-btn {
+    background: #F3F4F6 !important;
+    color: #6B7280 !important;
+    border-color: #E5E7EB !important;
+}
+
+:root.light-theme .network-testnet-btn.active {
+    background: #FEF3C7 !important;
+    color: #92400E !important;
+    border-color: #FCD34D !important;
+}
+
+:root.light-theme .network-add-footer {
+    background: #FFFFFF !important;
+    border-color: #E5E7EB !important;
+}
+
+:root.light-theme .network-add-footer-btn {
+    background: #F9FAFB !important;
+    border-color: #E5E7EB !important;
+    color: #374151 !important;
+}
+
+:root.light-theme .network-add-footer-btn:hover {
+    background: #F3F4F6 !important;
+    border-color: var(--primary-color) !important;
+    color: var(--primary-color) !important;
+}
+
+:root.light-theme .network-add-footer-btn svg {
+    color: #9CA3AF !important;
+}
+
+:root.light-theme .network-add-footer-btn:hover svg {
+    color: var(--primary-color) !important;
 }
 
 /* Swap Styles */
@@ -2803,6 +3198,12 @@ input:checked + .toggle-slider:before {
 .tx-detail-swap .tx-swap-symbol {
     font-size: 12px;
     color: var(--text-muted);
+}
+
+.tx-detail-swap .tx-swap-network {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
 }
 
 .tx-detail-swap .tx-swap-arrow {
@@ -3669,6 +4070,12 @@ input:checked + .toggle-slider:before {
 .swap-max-btn-small:hover {
     background: var(--accent-blue);
     color: white;
+}
+
+.swap-max-btn-small.active {
+    background: var(--accent-blue);
+    color: white;
+    box-shadow: 0 0 8px rgba(var(--accent-blue-rgb, 59, 130, 246), 0.5);
 }
 
 /* Network Selector Button */
@@ -4956,17 +5363,28 @@ input:disabled + .toggle-slider {
     font-size: 18px;
     border: 3px solid var(--bg-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
 }
 
 .approval-network-badge {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 20px;
-    height: 20px;
+    display: none;
+}
+
+#approvalTokenIconContainer {
+    position: relative;
+    width: 56px;
+    height: 56px;
+}
+
+#approvalTokenIconContainer img {
+    width: 56px !important;
+    height: 56px !important;
     border-radius: 50%;
-    border: 2px solid var(--bg-primary);
-    background: var(--bg-primary);
+    border: 3px solid var(--bg-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
 }
 
 .approval-token-name {
@@ -5392,4 +5810,29 @@ input:disabled + .toggle-slider {
 .simulation-warning.critical {
     background: rgba(239, 68, 68, 0.15);
     border-color: var(--error);
+}
+
+/* Gas updating indicator */
+.gas-updating {
+    opacity: 0.7;
+    cursor: wait !important;
+    position: relative;
+}
+
+.gas-updating::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 14px;
+    height: 14px;
+    margin-top: -7px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: gas-spin 0.8s linear infinite;
+}
+
+@keyframes gas-spin {
+    to { transform: rotate(360deg); }
 }

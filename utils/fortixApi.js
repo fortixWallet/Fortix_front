@@ -11,7 +11,7 @@ const API_TIMEOUT = 30000; // 30 seconds
  * Chain mapping for FortiX Backend (37 chains)
  * Version: 2.0.0 | Last updated: 2025-12-13
  */
-const CHAIN_MAPPING = {
+let CHAIN_MAPPING = {
     '1': 'ethereum',
     '10': 'optimism',
     '56': 'bsc',
@@ -53,9 +53,23 @@ const CHAIN_MAPPING = {
 };
 
 /**
- * Reverse chain mapping (name to chainId) - 37 chains
+ * Add a chain to CHAIN_MAPPING dynamically
+ * @param {string|number} chainId 
+ * @param {string} chainName 
  */
-const CHAIN_IDS = {
+function addChainMapping(chainId, chainName) {
+    const id = String(chainId);
+    if (!CHAIN_MAPPING[id] && chainName) {
+        CHAIN_MAPPING[id] = chainName;
+        CHAIN_IDS[chainName] = id;
+        console.log(`[FortixAPI] Added chain mapping: ${id} -> ${chainName}`);
+    }
+}
+
+/**
+ * Reverse chain mapping (name to chainId) - dynamic
+ */
+let CHAIN_IDS = {
     'ethereum': '1',
     'optimism': '10',
     'bsc': '56',
@@ -172,20 +186,34 @@ async function getSwapQuote({
  * Execute swap - Get transaction data for signing
  * @param {string} aggregator - Aggregator name from quote (e.g., 'okx', 'rango', 'squid')
  * @param {Object} quoteRequest - Original quote request parameters
+ * @param {Object} selectedQuote - Optional: Full quote object for route consistency (prevents different route on execute)
  * @returns {Promise<Object>} Transaction data ready for signing
  */
-async function executeSwap(aggregator, quoteRequest) {
+async function executeSwap(aggregator, quoteRequest, selectedQuote = null) {
     const url = `${FORTIX_API_BASE}/api/v1/swap/execute`;
+
+    const requestBody = {
+        aggregator,
+        quoteRequest
+    };
+
+    // Include selectedQuote to ensure same route is used (critical for Rango)
+    // This prevents execute from returning a different route with different bridge fees
+    if (selectedQuote) {
+        requestBody.selectedQuote = selectedQuote;
+        console.log('[FortixAPI] executeSwap with selectedQuote:', {
+            requestId: selectedQuote.requestId,
+            aggregator: selectedQuote.aggregator,
+            hasRawResponse: !!selectedQuote.rawResponse
+        });
+    }
 
     const response = await fetchWithTimeout(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            aggregator,
-            quoteRequest
-        })
+        body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -424,6 +452,105 @@ async function getTokenPrices({ tokens, vsCurrency = 'usd' }) {
 }
 
 /**
+ * Get batch token prices by chainId + address
+ * POST /api/v1/tokens/prices
+ * @param {Array<{chainId: number|string, address: string}>} tokens - Array of {chainId, address}
+ * @returns {Promise<Object>} { tokens: [{chainId, address, symbol, priceUsd, priceUpdatedAt, priceTier}], count }
+ */
+async function getBatchTokenPrices(tokens) {
+    if (!tokens || tokens.length === 0) {
+        return { tokens: [], count: 0 };
+    }
+
+    const url = `${FORTIX_API_BASE}/api/v1/tokens/prices`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tokens })
+    }, 15000); // 15 second timeout for batch
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Batch price fetch failed' }));
+        const errorMsg = typeof error.error === 'string'
+            ? error.error
+            : error.message || JSON.stringify(error.error) || `HTTP ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Get token metadata from backend (single token)
+ * @param {string|number} chainId - Chain ID (e.g., '42161' for Arbitrum)
+ * @param {string} address - Token contract address
+ * @returns {Promise<Object>} Token metadata: symbol, decimals, name, source, tier, isWhitelisted, isPopular, verified, priceUsd
+ */
+async function getTokenMetadata(chainId, address) {
+    const url = `${FORTIX_API_BASE}/api/v1/tokens/metadata/${chainId}/${address}`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }, 10000); // 10 second timeout
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Token metadata fetch failed' }));
+        const errorMsg = typeof error.error === 'string'
+            ? error.error
+            : error.message || JSON.stringify(error.error) || `HTTP ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Get batch token metadata from backend (up to 250 tokens)
+ * POST /api/v1/tokens/metadata/batch
+ * @param {Array<{chainId: number|string, address: string}>} tokens - Array of {chainId, address}
+ * @returns {Promise<Object>} { data: { tokens: [...], count } }
+ *
+ * Response tokens contain: symbol, name, decimals, logoURI, priceUsd, verified, isWhitelisted, isPopular, source
+ */
+async function getBatchTokenMetadata(tokens) {
+    if (!tokens || tokens.length === 0) {
+        return { data: { tokens: [], count: 0 } };
+    }
+
+    // Backend limit: 250 tokens per request
+    if (tokens.length > 250) {
+        console.warn(`[API] getBatchTokenMetadata: ${tokens.length} tokens exceeds limit of 250, truncating`);
+        tokens = tokens.slice(0, 250);
+    }
+
+    const url = `${FORTIX_API_BASE}/api/v1/tokens/metadata/batch`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tokens })
+    }, 15000); // 15 second timeout for batch
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Batch metadata fetch failed' }));
+        const errorMsg = typeof error.error === 'string'
+            ? error.error
+            : error.message || JSON.stringify(error.error) || `HTTP ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    return await response.json();
+}
+
+/**
  * Convert chainId to chain name for API
  * @param {string|number} chainId - Chain ID (e.g., '1', 56)
  * @returns {string} Chain name for API (e.g., 'ethereum')
@@ -460,6 +587,79 @@ function getNativeTokenAddress() {
     return NATIVE_TOKEN;
 }
 
+// ============================================================================
+// NETWORK API ENDPOINTS
+// Progressive Enhancement: 7 hardcoded + dynamic load via API
+// ============================================================================
+
+/**
+ * Get all available networks for "Add Network" dialog
+ * @returns {Promise<Object>} List of all supported networks with capabilities
+ */
+async function getAvailableNetworks() {
+    const url = `${FORTIX_API_BASE}/api/v1/networks/available`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }, 15000);
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Network error' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Get top N networks by aggregator support
+ * @param {number} [limit=10] - Number of networks to return
+ * @returns {Promise<Object>} Top networks sorted by capabilities
+ */
+async function getTopNetworks(limit = 10) {
+    const url = `${FORTIX_API_BASE}/api/v1/networks/top?limit=${limit}`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }, 10000);
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Network error' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Get detailed network info by chainId or chainName
+ * @param {string|number} chainIdOrName - Chain ID (e.g., 1) or name (e.g., 'ethereum')
+ * @returns {Promise<Object>} Detailed network info with capabilities and destinations
+ */
+async function getNetworkDetails(chainIdOrName) {
+    const url = `${FORTIX_API_BASE}/api/v1/networks/${chainIdOrName}`;
+
+    const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }, 10000);
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Network not found' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
+}
+
 // Export API client
 const FortixAPI = {
     // Core API methods
@@ -469,6 +669,11 @@ const FortixAPI = {
     getSwapTransaction,    // DEPRECATED: Use executeSwap instead
     getHealth,
 
+    // Network API methods (Progressive Enhancement)
+    getAvailableNetworks,  // GET /api/v1/networks/available
+    getTopNetworks,        // GET /api/v1/networks/top?limit=N
+    getNetworkDetails,     // GET /api/v1/networks/{chainId}
+
     // Security methods (FSS - Fraud & Scam Shield)
     analyzeTransactionSecurity,
 
@@ -477,12 +682,18 @@ const FortixAPI = {
 
     // Price methods
     getTokenPrices,
+    getBatchTokenPrices,  // POST /api/v1/tokens/prices (batch by chainId+address)
+
+    // Token metadata methods
+    getTokenMetadata,
+    getBatchTokenMetadata,  // POST /api/v1/tokens/metadata/batch (up to 250 tokens)
 
     // Helper methods
     getChainName,
     getChainId,
     isNativeToken,
     getNativeTokenAddress,
+    addChainMapping,
 
     // Constants
     NATIVE_TOKEN,

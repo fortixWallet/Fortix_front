@@ -59,6 +59,33 @@ async function openTokenDetails(tokenData) {
     document.getElementById('tokenDetailsNetworkIcon').src = getNativeTokenIcon(currentNetwork);
     document.getElementById('tokenDetailsNetworkName').textContent = NETWORKS[currentNetwork].name;
 
+    // Fetch and display token trust badge
+    const trustBadgeEl = document.getElementById('tokenDetailsTrustBadge');
+    if (trustBadgeEl) {
+        trustBadgeEl.innerHTML = ''; // Clear initially
+        // Native tokens are always verified
+        if (tokenData.isNative) {
+            trustBadgeEl.innerHTML = '<span class="token-badge token-badge-verified" title="Native Token">✓</span>';
+        } else if (tokenData.address && typeof fetchTokenMetadata === 'function') {
+            // Fetch metadata for ERC20 tokens
+            fetchTokenMetadata(currentNetwork, tokenData.address)
+                .then(metadata => {
+                    if (metadata && trustBadgeEl) {
+                        let badgeHTML = '';
+                        if (typeof getTokenBadgeHTML === 'function') {
+                            badgeHTML = getTokenBadgeHTML(metadata);
+                        } else if (metadata.verified || metadata.isWhitelisted || metadata.tier === 1) {
+                            badgeHTML = '<span class="token-badge token-badge-verified" title="Verified Token">✓</span>';
+                        } else if (metadata.isPopular || metadata.tier === 2) {
+                            badgeHTML = '<span class="token-badge token-badge-popular" title="Popular Token">★</span>';
+                        }
+                        trustBadgeEl.innerHTML = badgeHTML;
+                    }
+                })
+                .catch(err => console.warn('[TokenDetails] Metadata fetch failed:', err.message));
+        }
+    }
+
     // Set balance using BalanceManager - Single Source of Truth
     const balance = tokenData.isNative ? currentAccount.balance : (tokenData.balanceNum || 0);
     // For native tokens: use BalanceManager price, for ERC20: use cached price

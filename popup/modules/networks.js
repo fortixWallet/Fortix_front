@@ -15,30 +15,61 @@ function closeManageNetworksModal() {
     modal?.classList.remove('show');
 }
 
-function populateManageNetworksList() {
+async function populateManageNetworksList() {
     const listContainer = document.getElementById('manageNetworksList');
     if (!listContainer) return;
     
-    listContainer.innerHTML = Object.entries(NETWORKS).map(([id, network]) => {
+    // Get hardcoded chainIds for marking
+    const hardcodedIds = NetworkManager.HARDCODED_NETWORKS.map(n => String(n.chainId));
+    const testnetIds = NetworkManager.TESTNET_NETWORKS.map(n => String(n.chainId));
+    
+    // Sort: hardcoded first, then user-added, then testnets
+    const sortedEntries = Object.entries(NETWORKS).sort(([idA], [idB]) => {
+        const aHardcoded = hardcodedIds.includes(idA);
+        const bHardcoded = hardcodedIds.includes(idB);
+        const aTestnet = testnetIds.includes(idA);
+        const bTestnet = testnetIds.includes(idB);
+        
+        if (aHardcoded && !bHardcoded) return -1;
+        if (!aHardcoded && bHardcoded) return 1;
+        if (aTestnet && !bTestnet) return 1;
+        if (!aTestnet && bTestnet) return -1;
+        return 0;
+    });
+    
+    listContainer.innerHTML = sortedEntries.map(([id, network]) => {
         const isEnabled = enabledNetworks.includes(id);
         const isCurrent = id === currentNetwork;
+        const isHardcoded = hardcodedIds.includes(id);
+        const isTestnet = testnetIds.includes(id) || network.testnet;
+        const isUserAdded = !isHardcoded && !isTestnet;
         
         return `
-            <div class="manage-network-item ${!isEnabled ? 'disabled' : ''}" data-network="${id}">
+            <div class="manage-network-item ${!isEnabled ? 'disabled' : ''} ${isHardcoded ? 'hardcoded' : ''} ${isUserAdded ? 'user-added' : ''}" data-network="${id}">
                 <div class="manage-network-left">
                     <img class="manage-network-icon img-fallback" src="${network.icon}" data-fallback="../assets/token-icons/eth.svg" alt="">
                     <div class="manage-network-info">
                         <div class="manage-network-name">
                             ${network.name}
                             ${isCurrent ? '<span class="manage-network-current">Current</span>' : ''}
+                            ${isTestnet ? '<span class="manage-network-current" style="background: rgba(234, 179, 8, 0.15); color: #EAB308;">Testnet</span>' : ''}
                         </div>
                         <div class="manage-network-chain">${network.symbol} · Chain ID: ${id}</div>
                     </div>
                 </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" class="network-toggle" data-network="${id}" ${isEnabled ? 'checked' : ''} ${isCurrent ? 'disabled' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
+                <div style="display: flex; align-items: center;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" class="network-toggle" data-network="${id}" ${isEnabled ? 'checked' : ''} ${isCurrent ? 'disabled' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    ${isUserAdded ? `
+                        <button class="manage-network-remove" data-network="${id}" title="Remove network">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    ` : ''}
+                </div>
             </div>
         `;
     }).join('');
@@ -50,6 +81,54 @@ function populateManageNetworksList() {
             toggleNetwork(networkId, e.target.checked);
         });
     });
+    
+    // Add remove handlers
+    listContainer.querySelectorAll('.manage-network-remove').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const networkId = e.currentTarget.dataset.network;
+            await removeUserNetwork(networkId);
+        });
+    });
+}
+
+async function removeUserNetwork(networkId) {
+    const network = NETWORKS[networkId];
+    if (!network) return;
+    
+    // Confirm removal
+    if (!confirm(`Remove ${network.name} from your networks?`)) {
+        return;
+    }
+    
+    try {
+        // Remove from NetworkManager
+        const removed = await NetworkManager.removeNetwork(parseInt(networkId));
+        
+        if (removed) {
+            // Remove from global NETWORKS
+            delete NETWORKS[networkId];
+            
+            // Remove from enabledNetworks
+            enabledNetworks = enabledNetworks.filter(id => id !== networkId);
+            await chrome.storage.local.set({ enabledNetworks });
+            
+            // If this was current network, switch to Ethereum
+            if (currentNetwork === networkId) {
+                await selectNetwork('1');
+            }
+            
+            // Update UI
+            populateManageNetworksList();
+            updateManageNetworksCount();
+            updateEnabledNetworksSettingsCount();
+            
+            showToast(`${network.name} removed`, 'success');
+        }
+    } catch (error) {
+        console.error('[Networks] Failed to remove network:', error);
+        showToast('Failed to remove network', 'error');
+    }
 }
 
 async function toggleNetwork(networkId, enabled) {
@@ -126,6 +205,214 @@ function updateEnabledNetworksSettingsCount() {
     }
 }
 
+// ==================== ADD NETWORK ====================
+
+let availableNetworksCache = [];
+let isLoadingAvailableNetworks = false;
+
+function openAddNetworkModal() {
+    const modal = document.getElementById('addNetworkModal');
+    if (!modal) return;
+    
+    // Reset search
+    const searchInput = document.getElementById('addNetworkSearch');
+    if (searchInput) searchInput.value = '';
+    
+    modal.style.display = '';
+    modal.classList.add('show');
+    
+    // Load available networks
+    loadAvailableNetworks();
+}
+
+function closeAddNetworkModal() {
+    const modal = document.getElementById('addNetworkModal');
+    modal?.classList.remove('show');
+}
+
+async function loadAvailableNetworks() {
+    const loadingEl = document.getElementById('addNetworkLoading');
+    const errorEl = document.getElementById('addNetworkError');
+    const listEl = document.getElementById('addNetworksList');
+    const emptyEl = document.getElementById('addNetworkEmpty');
+    
+    // Show loading
+    loadingEl.style.display = 'block';
+    errorEl.style.display = 'none';
+    listEl.style.display = 'none';
+    emptyEl.style.display = 'none';
+    
+    isLoadingAvailableNetworks = true;
+    
+    try {
+        // Get available networks from NetworkManager (filters already added)
+        availableNetworksCache = await NetworkManager.getAvailableNetworks();
+        
+        // Hide loading
+        loadingEl.style.display = 'none';
+        
+        if (availableNetworksCache.length === 0) {
+            emptyEl.style.display = 'block';
+            emptyEl.querySelector('p').textContent = 'All networks already added!';
+        } else {
+            listEl.style.display = 'block';
+            renderAvailableNetworks(availableNetworksCache);
+        }
+    } catch (error) {
+        console.error('[Add Network] Failed to load:', error);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        document.getElementById('addNetworkErrorText').textContent = 
+            error.message || 'Failed to load networks. Check your connection.';
+    } finally {
+        isLoadingAvailableNetworks = false;
+    }
+}
+
+function renderAvailableNetworks(networks) {
+    const listEl = document.getElementById('addNetworksList');
+    const emptyEl = document.getElementById('addNetworkEmpty');
+    
+    if (!listEl) return;
+    
+    if (networks.length === 0) {
+        listEl.style.display = 'none';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    
+    listEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    
+    listEl.innerHTML = networks.map(network => {
+        const capabilities = network.capabilities || {};
+        const hasSwap = capabilities.swap || (capabilities.swapAggregators?.length > 0);
+        const hasBridge = capabilities.bridge || (capabilities.bridgeAggregators?.length > 0);
+        
+        return `
+            <div class="add-network-item" data-chain-id="${network.chainId}">
+                <div class="add-network-left">
+                    <img class="add-network-icon img-fallback" src="${network.icon || ''}" data-fallback="../assets/token-icons/eth.svg" alt="">
+                    <div class="add-network-info">
+                        <div class="add-network-name">${network.name}</div>
+                        <div class="add-network-meta">
+                            <span>${network.symbol} · ID: ${network.chainId}</span>
+                            ${hasSwap ? '<span class="add-network-badge swap">Swap</span>' : ''}
+                            ${hasBridge ? '<span class="add-network-badge bridge">Bridge</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="add-network-action">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add click handlers
+    listEl.querySelectorAll('.add-network-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const chainId = parseInt(item.dataset.chainId);
+            addNetwork(chainId, item);
+        });
+    });
+}
+
+async function addNetwork(chainId, itemElement) {
+    // Prevent double-click
+    if (itemElement.classList.contains('adding')) return;
+    
+    // Show loading state
+    itemElement.classList.add('adding');
+    const actionEl = itemElement.querySelector('.add-network-action');
+    actionEl.classList.add('loading');
+    actionEl.innerHTML = '<div class="spinner-small"></div>';
+    
+    try {
+        // Add network via NetworkManager
+        const network = await NetworkManager.addNetwork(chainId);
+        
+        if (network) {
+            // Add to global NETWORKS
+            NETWORKS[String(chainId)] = {
+                name: network.name,
+                rpc: network.rpc,
+                explorer: network.explorer,
+                symbol: network.symbol,
+                icon: network.icon,
+                chain: network.chainName,
+                chainId: network.chainId,
+                color: network.color,
+                capabilities: network.capabilities
+            };
+            
+            // Add to enabledNetworks
+            const chainIdStr = String(chainId);
+            if (!enabledNetworks.includes(chainIdStr)) {
+                enabledNetworks.push(chainIdStr);
+                await chrome.storage.local.set({ enabledNetworks });
+            }
+            
+            // Remove from available list
+            availableNetworksCache = availableNetworksCache.filter(n => n.chainId !== chainId);
+            
+            // Animate removal
+            itemElement.style.transform = 'translateX(100%)';
+            itemElement.style.opacity = '0';
+            
+            setTimeout(() => {
+                itemElement.remove();
+                
+                // Check if list is empty
+                if (availableNetworksCache.length === 0) {
+                    document.getElementById('addNetworksList').style.display = 'none';
+                    const emptyEl = document.getElementById('addNetworkEmpty');
+                    emptyEl.style.display = 'block';
+                    emptyEl.querySelector('p').textContent = 'All networks already added!';
+                }
+            }, 200);
+            
+            // Update manage networks modal in background
+            updateManageNetworksCount();
+            updateEnabledNetworksSettingsCount();
+            
+            showToast(`${network.name} added!`, 'success');
+        }
+    } catch (error) {
+        console.error('[Add Network] Failed:', error);
+        
+        // Reset item state
+        itemElement.classList.remove('adding');
+        actionEl.classList.remove('loading');
+        actionEl.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+        `;
+        
+        showToast(error.message || 'Failed to add network', 'error');
+    }
+}
+
+function filterAvailableNetworks(searchTerm) {
+    const term = searchTerm.toLowerCase().trim();
+    
+    if (!term) {
+        renderAvailableNetworks(availableNetworksCache);
+        return;
+    }
+    
+    const filtered = availableNetworksCache.filter(network => 
+        network.name.toLowerCase().includes(term) ||
+        network.symbol.toLowerCase().includes(term) ||
+        String(network.chainId).includes(term)
+    );
+    
+    renderAvailableNetworks(filtered);
+}
+
 function setupManageNetworksListeners() {
     // Open from settings
     document.getElementById('settingsManageNetworks')?.addEventListener('click', () => {
@@ -148,10 +435,48 @@ function setupManageNetworksListeners() {
     document.getElementById('enableAllNetworks')?.addEventListener('click', enableAllNetworks);
     document.getElementById('disableAllNetworks')?.addEventListener('click', disableAllNetworks);
     
+    // Add Network button
+    document.getElementById('addNetworkBtn')?.addEventListener('click', () => {
+        openAddNetworkModal();
+    });
+    
+    // Add Network Modal - Back button - returns to Select Network
+    document.getElementById('addNetworkBack')?.addEventListener('click', () => {
+        closeAddNetworkModal();
+        // Refresh network list and reopen Select Network
+        populateNetworkList('');
+        openNetworkModal();
+    });
+    
+    // Add Network Modal - Click outside
+    const addModal = document.getElementById('addNetworkModal');
+    addModal?.addEventListener('click', (e) => {
+        if (e.target === addModal) {
+            closeAddNetworkModal();
+            populateNetworkList('');
+            openNetworkModal();
+        }
+    });
+    
+    // Add Network Modal - Search
+    document.getElementById('addNetworkSearch')?.addEventListener('input', (e) => {
+        filterAvailableNetworks(e.target.value);
+    });
+    
+    // Add Network Modal - Retry button
+    document.getElementById('addNetworkRetry')?.addEventListener('click', loadAvailableNetworks);
+    
     // Escape to close
     modal?.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeManageNetworksModal();
+        }
+    });
+    
+    addModal?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAddNetworkModal();
+            populateManageNetworksList();
         }
     });
 }
@@ -165,8 +490,8 @@ function setupEventListeners() {
     });
     
     // Approval screen (old - not used, modal is used instead)
-    document.getElementById('approvalScreenRejectBtn')?.addEventListener('click', handleApprovalReject);
-    document.getElementById('approvalScreenConfirmBtn')?.addEventListener('click', handleApprovalConfirm);
+    document.getElementById('approvalRejectBtn')?.addEventListener('click', handleApprovalReject);
+    document.getElementById('approvalConfirmBtn')?.addEventListener('click', handleApprovalConfirm);
     // Note: approvalConfirmBtn is handled by initApprovalModalListeners() for the new modal
     
     // Approval gas speed selection
@@ -239,7 +564,8 @@ function setupEventListeners() {
         
         // Reset to ETH mode
         isUSDMode = false;
-        document.getElementById('sendAssetSymbol').textContent = NETWORKS[currentNetwork]?.symbol || 'ETH';
+        const sendMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        document.getElementById('sendAssetSymbol').textContent = NETWORKS[currentNetwork]?.symbol || sendMeta.symbol || 'ETH';
         document.getElementById('sendAmount').step = '0.000001';
         
         openModal('sendModal');
@@ -293,6 +619,8 @@ function setupEventListeners() {
     // Swap event listeners
     document.getElementById('swapFromToken')?.addEventListener('change', onSwapTokenChange);
     document.getElementById('swapToToken')?.addEventListener('change', onSwapTokenChange);
+    // Input: immediate handler to stop refresh + clear MAX, then debounced quote fetch
+    document.getElementById('swapFromAmount')?.addEventListener('input', handleSwapInputChange);
     document.getElementById('swapFromAmount')?.addEventListener('input', debounce(fetchSwapQuote, 500));
     document.getElementById('swapMaxBtn')?.addEventListener('click', setSwapMaxAmount);
     document.getElementById('swapDirectionBtn')?.addEventListener('click', swapTokenDirection);
@@ -513,8 +841,9 @@ function setupEventListeners() {
             updateAssetDisplay();
         }
         
-        // Update UI
-        document.getElementById('sendAssetSymbol').textContent = selectedAsset?.symbol || 'ETH';
+        // Update UI - fallback to NETWORK_METADATA if selectedAsset symbol is missing
+        const assetMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+        document.getElementById('sendAssetSymbol').textContent = selectedAsset?.symbol || assetMeta.symbol || 'ETH';
         document.getElementById('sendAmount').step = '0.000001';
         
         // Populate your accounts list

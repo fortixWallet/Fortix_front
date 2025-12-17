@@ -323,8 +323,10 @@ function buildTxIconHTML(tx, txType, statusClass = '', statusIcon = '') {
     // For bridges - show token icons with arrow and status badge
     if (txType === 'bridge') {
         if (tx.bridgeFromNetwork && tx.bridgeToNetwork) {
-            const fromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || 'ETH';
-            const toToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || 'ETH';
+            const fromMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeFromNetwork)] || {};
+            const toMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeToNetwork)] || {};
+            const fromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || fromMeta.symbol || 'ETH';
+            const toToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || toMeta.symbol || 'ETH';
             const fromTokenIcon = getTokenIconBySymbol(fromToken);
             const toTokenIcon = getTokenIconBySymbol(toToken);
             const fromNetworkIcon = getNetworkIcon(tx.bridgeFromNetwork);
@@ -387,10 +389,12 @@ function getTxTitle(tx, txType) {
     // For bridges - show tokens and networks
     if (txType === 'bridge') {
         if (tx.bridgeFromNetwork && tx.bridgeToNetwork) {
-            const fromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || 'ETH';
-            const toToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || 'ETH';
-            const fromName = NETWORKS[tx.bridgeFromNetwork]?.name?.split(' ')[0] || 'L1';
-            const toName = NETWORKS[tx.bridgeToNetwork]?.name?.split(' ')[0] || 'L2';
+            const fromNetMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeFromNetwork)] || {};
+            const toNetMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeToNetwork)] || {};
+            const fromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || fromNetMeta.symbol || 'ETH';
+            const toToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || toNetMeta.symbol || 'ETH';
+            const fromName = NETWORKS[tx.bridgeFromNetwork]?.name?.split(' ')[0] || fromNetMeta.name?.split(' ')[0] || 'L1';
+            const toName = NETWORKS[tx.bridgeToNetwork]?.name?.split(' ')[0] || toNetMeta.name?.split(' ')[0] || 'L2';
             
             // If same token, show "ETH: Arbitrum → Ethereum"
             // If different tokens, show "ETH → USDC"
@@ -541,7 +545,7 @@ async function loadTransactions() {
                 let displayAmount = '';
                 let displayValue = '';
                 let amountClass = 'neutral';
-                
+
                 if (txType === 'swap' && tx.swapFromToken && tx.swapToToken) {
                     // For swaps with token info, show both amounts
                     const fromAmt = parseFloat(tx.swapFromAmount) || 0;
@@ -549,6 +553,20 @@ async function loadTransactions() {
                     displayAmount = `-${formatTokenBalance(fromAmt, tx.swapFromToken)} ${tx.swapFromToken}`;
                     displayValue = `+${formatTokenBalance(toAmt, tx.swapToToken)} ${tx.swapToToken}`;
                     amountClass = 'swap';
+                } else if (txType === 'bridge' && tx.bridgeFromNetwork && tx.bridgeToNetwork) {
+                    // For bridges with network info, show FROM and TO amounts (may differ due to exchange)
+                    const bridgeFromMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeFromNetwork)] || {};
+                    const bridgeToMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeToNetwork)] || {};
+                    const fromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || bridgeFromMeta.symbol || 'ETH';
+                    const toToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || bridgeToMeta.symbol || 'ETH';
+                    // Use separate amounts for from/to (they can be different due to exchange rate)
+                    const fromAmt = parseFloat(tx.bridgeFromAmount) || parseFloat(tx.bridgeAmount) || parseFloat(tx.amount) || 0;
+                    const toAmt = parseFloat(tx.bridgeToAmount) || fromAmt; // Fallback to fromAmt if toAmt not stored
+                    if (fromAmt > 0) {
+                        displayAmount = `-${formatTokenBalance(fromAmt, fromToken)} ${fromToken}`;
+                        displayValue = `+${formatTokenBalance(toAmt, toToken)} ${toToken}`;
+                        amountClass = 'swap';
+                    }
                 } else {
                     const txAmountNum = parseFloat(tx.amount) || 0;
                     if (txAmountNum > 0) {
@@ -570,7 +588,9 @@ async function loadTransactions() {
                             const tokenData = Object.values(tokenDataCache.balances).find(t => t.symbol === tx.tokenSymbol);
                             if (tokenData && tokenData.price) txValue = txAmountNum * tokenData.price;
                         } else {
-                            txValue = txAmountNum * (nativeTokenPrice || ethPrice);
+                            // Use BalanceManager for accurate native token price (supports all networks)
+                            const currentNativePrice = BalanceManager.getNativePrice(currentNetwork) || nativeTokenPrice || ethPrice;
+                            txValue = txAmountNum * currentNativePrice;
                         }
                         if (txValue > 0) displayValue = `≈ ${formatCurrency(txValue)}`;
                     }
@@ -775,8 +795,9 @@ function showTxDetails(index) {
     }
     
     const txType = detectTxType(tx);
-    const networkSymbol = NETWORKS[currentNetwork]?.symbol || 'ETH';
-    const networkName = NETWORKS[currentNetwork]?.name || 'Unknown';
+    const detailsMeta = NetworkManager.NETWORK_METADATA?.[parseInt(currentNetwork)] || {};
+    const networkSymbol = NETWORKS[currentNetwork]?.symbol || detailsMeta.symbol || 'ETH';
+    const networkName = NETWORKS[currentNetwork]?.name || detailsMeta.name || 'Unknown';
     
     // Status config
     const statusConfig = {
@@ -815,24 +836,30 @@ function showTxDetails(index) {
     if (txType === 'bridge' && hasBridgeInfo) {
         const fromIcon = getNativeTokenIcon(tx.bridgeFromNetwork);
         const toIcon = getNativeTokenIcon(tx.bridgeToNetwork);
-        const fromNetworkName = NETWORKS[tx.bridgeFromNetwork]?.name || 'Source';
-        const toNetworkName = NETWORKS[tx.bridgeToNetwork]?.name || 'Destination';
-        const bridgeAmount = tx.bridgeAmount || parseFloat(tx.amount) || 0;
-        const bridgeFromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || 'ETH';
-        const bridgeToToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || 'ETH';
-        
+        const bridgeFromMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeFromNetwork)] || {};
+        const bridgeToMeta = NetworkManager.NETWORK_METADATA?.[parseInt(tx.bridgeToNetwork)] || {};
+        const fromNetworkName = NETWORKS[tx.bridgeFromNetwork]?.name || bridgeFromMeta.name || 'Source';
+        const toNetworkName = NETWORKS[tx.bridgeToNetwork]?.name || bridgeToMeta.name || 'Destination';
+        const bridgeFromToken = tx.bridgeFromToken || NETWORKS[tx.bridgeFromNetwork]?.symbol || bridgeFromMeta.symbol || 'ETH';
+        const bridgeToToken = tx.bridgeToToken || NETWORKS[tx.bridgeToNetwork]?.symbol || bridgeToMeta.symbol || 'ETH';
+        // Use separate amounts for from/to (they can differ due to exchange rate)
+        const bridgeFromAmount = parseFloat(tx.bridgeFromAmount) || parseFloat(tx.bridgeAmount) || parseFloat(tx.amount) || 0;
+        const bridgeToAmount = parseFloat(tx.bridgeToAmount) || bridgeFromAmount;
+
         bridgeSection = `
             <div class="tx-detail-swap">
                 <div class="tx-swap-token">
-                    <img src="${fromIcon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${fromNetworkName}">
-                    <div class="tx-swap-amount">-${formatTokenBalance(bridgeAmount, bridgeFromToken)}</div>
-                    <div class="tx-swap-symbol">${fromNetworkName}</div>
+                    <img src="${fromIcon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${bridgeFromToken}">
+                    <div class="tx-swap-amount">-${formatTokenBalance(bridgeFromAmount, bridgeFromToken)}</div>
+                    <div class="tx-swap-symbol">${bridgeFromToken}</div>
+                    <div class="tx-swap-network">${fromNetworkName}</div>
                 </div>
                 <div class="tx-swap-arrow">→</div>
                 <div class="tx-swap-token">
-                    <img src="${toIcon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${toNetworkName}">
-                    <div class="tx-swap-amount">+${formatTokenBalance(bridgeAmount, bridgeToToken)}</div>
-                    <div class="tx-swap-symbol">${toNetworkName}</div>
+                    <img src="${toIcon}" class="img-fallback" data-fallback="${DEFAULT_TOKEN_ICON}" alt="${bridgeToToken}">
+                    <div class="tx-swap-amount">+${formatTokenBalance(bridgeToAmount, bridgeToToken)}</div>
+                    <div class="tx-swap-symbol">${bridgeToToken}</div>
+                    <div class="tx-swap-network">${toNetworkName}</div>
                 </div>
             </div>
         `;
@@ -1024,11 +1051,12 @@ async function sendTransaction() {
     }
     // ============================================================
     
-    // Convert USD to ETH if in USD mode (for native token)
-    let amountInETH = amount;
+    // Convert USD to native token if in USD mode (for native token)
+    let amountInNative = amount;
     if (selectedAsset.type === 'native' && isUSDMode) {
-        // Input is in USD, convert to ETH
-        amountInETH = amount / ethPrice;
+        // Input is in USD, convert to native token amount
+        const nativePrice = BalanceManager.getNativePrice(currentNetwork) || ethPrice;
+        amountInNative = amount / nativePrice;
     }
     
     // Close send modal
@@ -1037,8 +1065,8 @@ async function sendTransaction() {
     let transaction;
     
     if (selectedAsset.type === 'native') {
-        // Native token transfer - use amountInETH
-        const valueWei = '0x' + BigInt(Math.floor(amountInETH * 1e18)).toString(16);
+        // Native token transfer - use amountInNative
+        const valueWei = '0x' + BigInt(Math.floor(amountInNative * 1e18)).toString(16);
         
         transaction = {
             from: currentAccount.address,
@@ -1076,7 +1104,7 @@ async function sendTransaction() {
     // Show approval screen directly (internal transaction)
     await showApprovalScreen({
         transaction: transaction,
-        origin: 'Forge Wallet (Internal)',
+        origin: 'FortiX Wallet (Internal)',
         requestId: requestId
     });
 }

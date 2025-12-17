@@ -23,8 +23,8 @@ let userSettings = {
 // i18n translations - Complete
 const translations = {
     en: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Loading Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Loading FortiX Wallet...',
         send: 'Send',
         receive: 'Receive',
         bridge: 'Bridge',
@@ -163,7 +163,7 @@ const translations = {
         createNewWallet: 'Create New Wallet',
         importWallet: 'Import Wallet',
         importExistingWallet: 'Import Existing Wallet',
-        welcomeTitle: 'Welcome to Forge Wallet',
+        welcomeTitle: 'Welcome to FortiX Wallet',
         welcomeSubtitle: 'Secure Ethereum wallet with multi-chain bridge support',
         unlockWallet: 'Unlock Wallet',
         unlock: 'Unlock',
@@ -174,8 +174,8 @@ const translations = {
         transactionsWillAppear: 'Transactions will appear here after you send or receive crypto'
     },
     uk: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Завантаження Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Завантаження FortiX Wallet...',
         send: 'Надіслати',
         receive: 'Отримати',
         bridge: 'Міст',
@@ -314,7 +314,7 @@ const translations = {
         createNewWallet: 'Створити новий гаманець',
         importWallet: 'Імпортувати гаманець',
         importExistingWallet: 'Імпортувати існуючий гаманець',
-        welcomeTitle: 'Ласкаво просимо до Forge Wallet',
+        welcomeTitle: 'Ласкаво просимо до FortiX Wallet',
         welcomeSubtitle: 'Безпечний Ethereum гаманець з підтримкою мостів',
         unlockWallet: 'Розблокувати гаманець',
         unlock: 'Розблокувати',
@@ -325,8 +325,8 @@ const translations = {
         transactionsWillAppear: 'Транзакції зʼявляться тут після надсилання або отримання криптовалюти'
     },
     ru: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Загрузка Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Загрузка FortiX Wallet...',
         send: 'Отправить',
         receive: 'Получить',
         bridge: 'Мост',
@@ -465,7 +465,7 @@ const translations = {
         createNewWallet: 'Создать новый кошелёк',
         importWallet: 'Импортировать кошелёк',
         importExistingWallet: 'Импортировать существующий кошелёк',
-        welcomeTitle: 'Добро пожаловать в Forge Wallet',
+        welcomeTitle: 'Добро пожаловать в FortiX Wallet',
         welcomeSubtitle: 'Безопасный Ethereum кошелёк с поддержкой мостов',
         unlockWallet: 'Разблокировать кошелёк',
         unlock: 'Разблокировать',
@@ -476,8 +476,8 @@ const translations = {
         transactionsWillAppear: 'Транзакции появятся здесь после отправки или получения криптовалюты'
     },
     es: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Cargando Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Cargando FortiX Wallet...',
         send: 'Enviar',
         receive: 'Recibir',
         bridge: 'Puente',
@@ -616,7 +616,7 @@ const translations = {
         createNewWallet: 'Crear nueva billetera',
         importWallet: 'Importar billetera',
         importExistingWallet: 'Importar billetera existente',
-        welcomeTitle: 'Bienvenido a Forge Wallet',
+        welcomeTitle: 'Bienvenido a FortiX Wallet',
         welcomeSubtitle: 'Billetera Ethereum segura con soporte de puentes',
         unlockWallet: 'Desbloquear billetera',
         unlock: 'Desbloquear',
@@ -627,8 +627,8 @@ const translations = {
         transactionsWillAppear: 'Las transacciones aparecerán aquí después de enviar o recibir cripto'
     },
     de: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Forge Wallet wird geladen...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'FortiX Wallet wird geladen...',
         send: 'Senden',
         receive: 'Empfangen',
         bridge: 'Brücke',
@@ -767,7 +767,7 @@ const translations = {
         createNewWallet: 'Neue Wallet erstellen',
         importWallet: 'Wallet importieren',
         importExistingWallet: 'Bestehende Wallet importieren',
-        welcomeTitle: 'Willkommen bei Forge Wallet',
+        welcomeTitle: 'Willkommen bei FortiX Wallet',
         welcomeSubtitle: 'Sichere Ethereum Wallet mit Bridge-Unterstützung',
         unlockWallet: 'Wallet entsperren',
         unlock: 'Entsperren',
@@ -778,8 +778,8 @@ const translations = {
         transactionsWillAppear: 'Transaktionen erscheinen hier nach dem Senden oder Empfangen'
     },
     zh: {
-        forgeWallet: 'Forge 钱包',
-        loading: '正在加载 Forge 钱包...',
+        fortiXWallet: 'FortiX 钱包',
+        loading: '正在加载 FortiX 钱包...',
         send: '发送',
         receive: '接收',
         bridge: '跨链',
@@ -918,7 +918,7 @@ const translations = {
         createNewWallet: '创建新钱包',
         importWallet: '导入钱包',
         importExistingWallet: '导入现有钱包',
-        welcomeTitle: '欢迎使用 Forge 钱包',
+        welcomeTitle: '欢迎使用 FortiX 钱包',
         welcomeSubtitle: '支持跨链桥接的安全以太坊钱包',
         unlockWallet: '解锁钱包',
         unlock: '解锁',
@@ -929,8 +929,8 @@ const translations = {
         transactionsWillAppear: '发送或接收加密货币后，交易将显示在这里'
     },
     fr: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Chargement de Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Chargement de FortiX Wallet...',
         send: 'Envoyer',
         receive: 'Recevoir',
         bridge: 'Pont',
@@ -1069,7 +1069,7 @@ const translations = {
         createNewWallet: 'Créer un nouveau portefeuille',
         importWallet: 'Importer un portefeuille',
         importExistingWallet: 'Importer un portefeuille existant',
-        welcomeTitle: 'Bienvenue sur Forge Wallet',
+        welcomeTitle: 'Bienvenue sur FortiX Wallet',
         welcomeSubtitle: 'Portefeuille Ethereum sécurisé avec support des ponts',
         unlockWallet: 'Déverrouiller le portefeuille',
         unlock: 'Déverrouiller',
@@ -1080,8 +1080,8 @@ const translations = {
         transactionsWillAppear: 'Les transactions apparaîtront ici après envoi ou réception'
     },
     pt: {
-        forgeWallet: 'Forge Wallet',
-        loading: 'Carregando Forge Wallet...',
+        fortiXWallet: 'FortiX Wallet',
+        loading: 'Carregando FortiX Wallet...',
         send: 'Enviar',
         receive: 'Receber',
         bridge: 'Ponte',
@@ -1220,7 +1220,7 @@ const translations = {
         createNewWallet: 'Criar nova carteira',
         importWallet: 'Importar carteira',
         importExistingWallet: 'Importar carteira existente',
-        welcomeTitle: 'Bem-vindo ao Forge Wallet',
+        welcomeTitle: 'Bem-vindo ao FortiX Wallet',
         welcomeSubtitle: 'Carteira Ethereum segura com suporte a pontes',
         unlockWallet: 'Desbloquear carteira',
         unlock: 'Desbloquear',
@@ -1375,7 +1375,7 @@ function applyTheme(theme) {
     
     // Save to localStorage for instant load on next open
     try {
-        localStorage.setItem('forgeWalletTheme', theme);
+        localStorage.setItem('fortiXWalletTheme', theme);
     } catch(e) {}
 }
 
@@ -1393,7 +1393,7 @@ function applyWalletMode(mode) {
     
     // Save to localStorage for instant load
     try {
-        localStorage.setItem('forgeWalletMode', mode);
+        localStorage.setItem('fortiXWalletMode', mode);
     } catch(e) {}
     
     console.log('Wallet mode applied:', mode);
